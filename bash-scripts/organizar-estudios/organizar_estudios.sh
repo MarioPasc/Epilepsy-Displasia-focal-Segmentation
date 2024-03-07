@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Directorio de origen
-source_dir="/home/mariopasc/Python/Datasets/ds-epilepsy"
+source_dir="/home/mariopasc/Python/Datasets/copy-ds-epilepsy/ds-epilepsy"
 
 # Directorio de destino para los ficheros T1w
 destination_t1w_dir="/home/mariopasc/Python/Datasets/ds-epilepsy/T1w-study"
@@ -35,7 +35,7 @@ for folder in "$source_dir"/*/; do
         # Mover los ficheros roi a su directorio de destino correspondiente
         find "$folder/anat" -type f -name "*roi*" -exec mv -t "$destination_roi_dir/$folder_name" {} +
         # Mover los ficheros T2sel_FLAIR a su directorio de destino correspondiente
-        find "$folder/anat" -type f -name "*T2sel_FLAIR*" -exec mv -t "$destination_t2flair_dir/$folder_name" {} +
+        find "$folder/anat" -type f -name "*FLAIR*" -exec mv -t "$destination_t2flair_dir/$folder_name" {} +
         echo "Ficheros movidos para la carpeta $folder_name."
     else
         echo "Advertencia: Carpeta 'anat' no encontrada en $folder_name."
