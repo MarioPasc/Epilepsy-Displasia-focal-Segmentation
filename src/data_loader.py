@@ -155,18 +155,6 @@ def holdout_nii_images(folder_path, val_percent, test_percent, output_path):
     print("Hold-out completed successfully.")
 
 
-def contours_YOLO_format(contours, height, width, output_path):
-    if len(contours) > 0:
-        with open(output_path, 'w') as f:
-            for i, contorno in enumerate(contours):
-                normalized = contorno / np.array([width, height])
-                str_contour = ' '.join([f"{coord:.3f}" for coord in normalized.flatten()])
-                str_contour = "0 " + str_contour
-                f.write(f"{str_contour}\n")
-    else:
-        return
-
-
 def extract_roi_contours(input_txt):
     # Verificar si el archivo .txt existe
     if not os.path.isfile(input_txt):
@@ -197,8 +185,10 @@ def extract_roi_contours(input_txt):
             contours, _ = cv.findContours(data.astype(np.uint8), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
             # Obtener las dimensiones de la imagen
-            width = data.shape[0]
-            height = data.shape[1]
+            # Cuidado... que las dimensiones de YOLO parecen estar cambiadas
+            # así parece funcionar bien, todas las coordenadas están entre 0 y 1
+            width = data.shape[1]
+            height = data.shape[0]
 
             # Guardar los contornos en formato YOLO
             output_path = os.path.join(folder, f"{nii_file.strip('.nii')}.txt")
@@ -215,6 +205,25 @@ def extract_roi_contours(input_txt):
     save_contours(test_nii_files, test_folder)
 
     print("Process finished with exit code 0.")
+
+
+def contours_YOLO_format(contours, height, width, output_path):
+    if len(contours) > 0:
+        # YOLOv8 no admite contornos con menos de 2 puntos (tag + x1+y1+x2+y2 = 5)
+        if len(contours[0]) >= 5:
+            with open(output_path, 'w') as f:
+                for i, contorno in enumerate(contours):
+                    # Normalizar coordenadas del contorno
+                    normalized = contorno.squeeze() / np.array([width, height])
+                    # Convertir a formato YOLO
+                    str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
+                    # Escribir etiqueta 0 y coordenadas
+                    f.write(f"0 {str_contour}\n")
+        else:
+            return
+    else:
+        return
+
 
 
 # =====================================================================================================================
