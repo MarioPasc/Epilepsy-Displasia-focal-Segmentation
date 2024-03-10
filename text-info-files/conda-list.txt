@@ -1,33 +1,6 @@
-# Epilepsy Lesion Segmentation using YOLOv8
-
-This project focuses on employing the YOLOv8 neural network architecture for segmenting epilepsy lesions, specifically focal cortical dysplasia type II, in MRI images. The dataset used for training and evaluation is the "An open presurgery MRI dataset of people with epilepsy and focal cortical dysplasia type II" available on OpenNeuro.
-
-## Dataset Information
-
-The dataset citation is as follows:
-
-```
-@dataset{ds004199:1.0.5,
-  author = {Fabiane Schuch and Lennart Walger and Matthias Schmitz and Bastian David and Tobias Bauer and Antonia Harms and Laura Fischbach and Freya Schulte and Martin Schidlowski and Johannes Reiter and Felix Bitzer and Randi von Wrede and Attila Rácz and Tobias Baumgartner and Valeri Borger and Matthias Schneider and Achim Flender and Albert Becker and Hartmut Vatter and Bernd Weber and Louisa Specht-Riemenschneider and Alexander Radbruch and Rainer Surges and Theodor Rüber},
-  title = {"An open presurgery MRI dataset of people with epilepsy and focal cortical dysplasia type II"},
-  year = {2023},
-  doi = {doi:10.18112/openneuro.ds004199.v1.0.5},
-  publisher = {OpenNeuro}
-}
-```
-
-## Project Structure
-
-- `src/`: Source code directory.
-  - `data_loader.py`: Python script for applying the hold out validation and convert .nii.gz files into .png or .jpeg2000 format  
-  - `data_processing.py`: Python script for converting and preprocessing images.
-  - `model_training.py`: Python script for training the YOLOv8 model.
-  - `model_evaluation.py`: Python script for evaluating the trained model on test data.
-- `README.md`: This file, providing an overview of the project.
-
-## Dependencies
-
-```bash
+# packages in environment at /home/mariopasc/Python/miniconda3/envs/torch_env:
+#
+# Name                    Version                   Build  Channel
 _libgcc_mutex             0.1                        main  
 _openmp_mutex             5.1                       1_gnu  
 anyio                     4.2.0            py38h06a4308_0  
@@ -118,6 +91,7 @@ ipywidgets                8.1.2                    pypi_0    pypi
 isoduration               20.11.0                  pypi_0    pypi
 jedi                      0.18.1           py38h06a4308_1  
 jinja2                    3.1.2                    pypi_0    pypi
+joblib                    1.3.2                    pypi_0    pypi
 jpeg                      9e                   h5eee18b_1  
 json5                     0.9.6              pyhd3eb1b0_0  
 jsonpointer               2.4                      pypi_0    pypi
@@ -250,6 +224,8 @@ requests                  2.31.0           py38h06a4308_0
 rfc3339-validator         0.1.4            py38h06a4308_0  
 rfc3986-validator         0.1.1            py38h06a4308_0  
 rpds-py                   0.10.6           py38hb02cf49_0  
+scikit-learn              1.3.2                    pypi_0    pypi
+scipy                     1.10.1                   pypi_0    pypi
 send2trash                1.8.2            py38h06a4308_0  
 setuptools                68.2.2                   pypi_0    pypi
 sip                       6.7.12           py38h6a678d5_0  
@@ -261,6 +237,7 @@ stack_data                0.2.0              pyhd3eb1b0_0
 sympy                     1.12                     pypi_0    pypi
 tbb                       2021.8.0             hdb19cb5_0  
 terminado                 0.17.1           py38h06a4308_0  
+threadpoolctl             3.3.0                    pypi_0    pypi
 tinycss2                  1.2.1            py38h06a4308_0  
 tinycudann                1.7                      pypi_0    pypi
 tk                        8.6.12               h1ccaba5_0  
@@ -287,4 +264,3 @@ zeromq                    4.3.5                h6a678d5_0
 zipp                      3.17.0           py38h06a4308_0  
 zlib                      1.2.13               h5eee18b_0  
 zstd                      1.5.5                hc292b87_0  
-``
