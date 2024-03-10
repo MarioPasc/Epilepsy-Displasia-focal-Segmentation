@@ -201,7 +201,7 @@ def extract_roi_contours(input_txt):
             height = data.shape[1]
 
             # Guardar los contornos en formato YOLO
-            output_path = os.path.join(folder, f"contours_{nii_file.strip('.nii')}.txt")
+            output_path = os.path.join(folder, f"{nii_file.strip('.nii')}.txt")
             contours_YOLO_format(contours=contours, height=height, width=width, output_path=output_path)
 
     # Obtener los nombres de archivos .nii para train, val y test
@@ -217,5 +217,69 @@ def extract_roi_contours(input_txt):
     print("Process finished with exit code 0.")
 
 
+# =====================================================================================================================
 
+def main():
+    # Declaramos variables
+    slices_excluir = "/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/text-info-files/excluir-slices.txt"
 
+    t2flair_path = "/home/mariopasc/Python/Datasets/ds-epilepsy/T2flair-study"
+    t1w_path = "/home/mariopasc/Python/Datasets/ds-epilepsy/T1w-study"
+    roi_path = "/home/mariopasc/Python/Datasets/ds-epilepsy/roi"
+
+    t2flair_nii_path = "/home/mariopasc/Python/Datasets/ds-epilepsy/T2flair-study-nii"
+    t1w_nii_path = "/home/mariopasc/Python/Datasets/ds-epilepsy/T1w-study-nii"
+    roi_nii_path = "/home/mariopasc/Python/Datasets/ds-epilepsy/roi-nii"
+
+    # Todas las variables que se declaran ahora deben ser añadidas en los ficheros .txt de especificación que se pasan
+    # como parámetro a las funciones convert_nii_image_holdout y extract_roi_contours.
+    """ 
+    t2flair_im_train_path = "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/train"
+    t2flair_im_val_path = "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/val"
+    t2flair_label_train_path = "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/labels/train"
+    t2flair_label_train_val = "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/labels/val"
+
+    t1w_im_train_path = "/home/mariopasc/Python/Datasets/t1w-yolov8-ds/images/train"
+    t1w_im_val_path = "/home/mariopasc/Python/Datasets/t1w-yolov8-ds/images/val"
+    t1w_label_train_path = "/home/mariopasc/Python/Datasets/t1w-yolov8-ds/labels/train"
+    t1w_label_train_val = "/home/mariopasc/Python/Datasets/t1w-yolov8-ds/labels/val"
+    """
+
+    # =========== CONVERSIÓN ESTUDIO T2FLAIR ===========
+    # IMAGES
+    # Primero tener que convertir nuestro estudio a ficheros .nii atómicos para cada imagen
+    study_to_nii(study_path=t2flair_path,
+                 save_path=t2flair_nii_path,
+                 path_excluir=slices_excluir)
+    print("Imágenes convertidas a .nii")
+    # Ahora, dado esa carpeta con los ficheros, le realizamos un holdout y guardamos los archivos
+    # .txt train val y test en una carpeta
+    holdout_nii_images(folder_path=t2flair_nii_path,
+                       val_percent=0.3,
+                       test_percent=0.1,
+                       output_path="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation"
+                                   "/text-info-files/t2flair-study/holdout")
+    print("Holdout realizado")
+    # Finalmente, damos:
+    # 1. La carpeta con las imágenes .nii
+    # 2. La ruta a los ficheros .txt que están destinados a train, a val o a test
+    # 3. El formato que compresión que queremos
+    convert_nii_image_holdout(
+        input_txt="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/text-info-files"
+                  "/t2flair-study/specifications/images.txt")
+    print("Imágenes convertidas a PNG y recolocadas")
+    # LABELS
+    # Primero tener que convertir nuestro estudio a ficheros .nii atómicos para cada imagen
+    study_to_nii(study_path=roi_path,
+                 save_path=roi_nii_path,
+                 path_excluir=slices_excluir)
+    print("ROI convertido a .nii")
+    extract_roi_contours(input_txt="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation"
+                                   "/text-info-files/t2flair-study/specifications/labels.txt")
+    print("ROI convertido a formato YOLOv8")
+
+    # NOTA: RECUERDA!! No todas las imágenes tienen un label.txt asociado, si una imagen no tiene un contorno asociado
+    # al ROI, entonces no se crea un .txt correspondiente.
+
+if __name__ == "__main__":
+    main()
