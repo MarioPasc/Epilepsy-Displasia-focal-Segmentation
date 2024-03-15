@@ -3,7 +3,7 @@ import numpy as np
 import cv2 as cv
 import nibabel as nib
 from sklearn.model_selection import train_test_split
-
+from concurrent.futures import ThreadPoolExecutor
 
 # Esta función convierte un estudio nii.gz a diversas imágenes .nii, asociando como nombre
 # de las imágenes idpaciente-slice.nii.
@@ -19,11 +19,18 @@ def convert_gz_nii(niigz_file, save_path, path_excluir, patient_id):
     # Si no existe, se asume que se incluyen todas.
     if os.path.isfile(path_excluir):
         with open(path_excluir, 'r') as archivo:
-            for linea in archivo:
-                exclude_slices.append(int(linea.strip()))
+            exclude_slices = [int(linea.strip()) for linea in archivo]
 
     # Cargar el archivo .nii.gz
-    img = nib.load(niigz_file)
+    try:
+        img = nib.load(niigz_file)
+    except FileNotFoundError:
+        print(f"Error: {niigz_file} not found.")
+        return
+    except Exception as e:
+        print(f"Error loading {niigz_file}: {e}")
+        return
+
     data = img.get_fdata()
     # Obtener el número de rodajas
     num_slices = data.shape[2]
@@ -46,8 +53,30 @@ def convert_gz_nii(niigz_file, save_path, path_excluir, patient_id):
         nib.save(nib.Nifti1Image(slice_data, img.affine), os.path.join(save_path, image_name))
 
 
+def convert_patient_nii(patient_id, study_path, save_path, path_excluir):
+    patient_folder = os.path.join(study_path, patient_id)
+    niigz_files = [path for path in os.listdir(patient_folder) if path.endswith(".nii.gz")]
+    if niigz_files:
+        niigz_file = os.path.join(patient_folder, niigz_files[0])
+        convert_gz_nii(niigz_file=niigz_file, save_path=save_path, patient_id=patient_id, path_excluir=path_excluir)
 
+
+def study_to_nii(study_path, save_path, path_excluir):
+    if not os.path.exists(study_path):
+        print("Input file does not exist")
+        return
+
+    patient_ids = [patient_id for patient_id in os.listdir(study_path) if
+                   os.path.isdir(os.path.join(study_path, patient_id))]
+
+    with ThreadPoolExecutor() as executor:
+        executor.map(convert_patient_nii, patient_ids, [study_path] * len(patient_ids),
+                     [save_path] * len(patient_ids),
+                     [path_excluir] * len(patient_ids))
+
+    print(f"Estudio {study_path} convertido a nii")
 # Esta función hace uso de la anterior para convertir un estudio completo a formato .nii
+"""
 def study_to_nii(study_path, save_path, path_excluir):
     if not os.path.exists(study_path):
         print("Input file does not exist")
@@ -72,7 +101,7 @@ def study_to_nii(study_path, save_path, path_excluir):
         convert_gz_nii(niigz_file=niigz_file, save_path=save_path, patient_id=patient_id, path_excluir=path_excluir)
 
     print(f"Estudio {study_path} convertido a nii")
-
+"""
 
 # Esta función toma como entrada una carpeta con imágenes .nii y las guarda en la carpeta de destino
 # en el formato especificado.

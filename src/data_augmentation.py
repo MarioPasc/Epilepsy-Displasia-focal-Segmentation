@@ -3,7 +3,7 @@ import cv2 as cv
 import nibabel as nib
 import numpy as np
 import random
-
+import shutil
 
 def save_slices_with_roi(input_dir, output_txt):
     # Verificar si el directorio de entrada existe
@@ -36,14 +36,21 @@ def save_slices_with_roi(input_dir, output_txt):
                     if len(contours[0]) >= 5:
                         files_with_roi.append(f"{patient_folder}-{i}.nii\n")
 
-
     # Escribir la lista de archivos con ROI en el archivo de salida
     with open(output_txt, 'w') as file:
         file.writelines(files_with_roi)
 
-    print("Process finished with exit code 0")
 
+def copy_augmented_image_with_roi(input_folder_roi, original_image_name, augmentation_method):
+    patient_slice = original_image_name.rstrip(".nii")
+    augmented_image_name = f"{patient_slice}-{augmentation_method.lower()}.nii"
+    source_path = os.path.join(input_folder_roi, original_image_name)
+    output_folder = os.path.join(input_folder_roi, augmented_image_name)
 
+    shutil.copy2(source_path, output_folder)
+    print(f"Augmented image with ROI copied to: {output_folder}")
+
+"""
 def copy_augmented_image_with_roi(input_folder_roi, original_image_name, augmentation_method):
     patient_slice = original_image_name.rstrip(".nii")
     # Construir el nombre de la imagen aumentada con el método especificado
@@ -63,8 +70,7 @@ def copy_augmented_image_with_roi(input_folder_roi, original_image_name, augment
     nib.save(augmented_img, augmented_image_path)
 
     print(f"Augmented image with ROI saved as: {augmented_image_path}")
-
-
+"""
 
 def gamma_correction_augmentation(image_data):
     gamma_value = random.uniform(.8, 1.2)
@@ -83,7 +89,7 @@ def brightness_augmentation(image_data):
 
 
 def translation_augmentation(image_data):
-    # Generar valores aleatorios para la translación en x e y entre -20 y 20 píxeles
+    # Generar valores aleatorios para la translación en x e y entre -20 y 20 píxelesmE G
     tx = random.randint(-10, 10)
     ty = random.randint(-10, 10)
     # Definir la matriz de transformación para la translación
