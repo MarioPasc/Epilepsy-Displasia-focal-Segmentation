@@ -1,8 +1,0 @@
-path: /home/mariopasc/Python/Datasets/t2flair-yolov8-ds
-train: images/train
-val: images/val
-test: images/test
-
-# Classes
-names:
-  0: lesion

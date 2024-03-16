@@ -1,13 +1,15 @@
 import data_loader
 import data_augmentation
+import data_explore
 import time
 
 
 def main():
     # Declaramos variables
-    slices_excluir = ("/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/text-info-files"
+    slices_excluir = ("/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/info-files"
                       "/excluir-slices.txt")
-    roi_slices_txt = "/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/text-info-files/t2flair-study/roi-slices.txt"
+    roi_slices_txt = ("/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/info-files"
+                      "/t2flair-study/roi-slices.txt")
     t2flair_path = "/home/mariopasc/Python/Datasets/ds-epilepsy/T2flair-study"
     t1w_path = "/home/mariopasc/Python/Datasets/ds-epilepsy/T1w-study"
     roi_path = "/home/mariopasc/Python/Datasets/ds-epilepsy/roi"
@@ -50,7 +52,7 @@ def main():
 
     # Nos interesa hacer un oversampling de la clase "lesion". Por ello, aumentaremos el número de imágenes con un
     # ROI asociado haciendo ligeras modificaciones.
-    roi_txt = ("/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/text-info-files"
+    roi_txt = ("/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/info-files"
                "/t2flair-study/roi-slices.txt")
     print("🔸Comenzamos aumento de datos para cortes con ROI")
     data_augmentation.save_slices_with_roi(input_dir="/home/mariopasc/Python/Datasets/ds-epilepsy/roi",
@@ -95,8 +97,8 @@ def main():
     data_loader.holdout_nii_images(folder_path=t2flair_nii_path,
                                    val_percent=0.3,
                                    test_percent=0.1,
-                                   output_path="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation"
-                                               "/text-info-files/t2flair-study/holdout")
+                                   output_path="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal"
+                                               "-segmentation/info-files/t2flair-study/holdout")
     print("✅ Holdout realizado")
     # =========================================
 
@@ -107,8 +109,8 @@ def main():
     # 3. El formato que compresión que queremos
     print("🔸Comenzamos conversión a JPG")
     data_loader.convert_nii_image_holdout(
-        input_txt="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/text-info-files"
-                  "/t2flair-study/specifications/images.txt")
+        input_txt="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/info-files/t2flair"
+                  "-study/specifications/images.txt")
     print("✅ Imágenes convertidas a PNG y recolocadas")
     # =========================================
 
@@ -117,11 +119,26 @@ def main():
     print("🔸Comenzamos conversión ROI a YOLO txt")
     time.sleep(5)
     data_loader.extract_roi_contours(input_txt="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal"
-                                               "-segmentation/text-info-files/t2flair-study/specifications/labels.txt")
+                                               "-segmentation/info-files/t2flair-study/specifications/labels.txt")
     print("✅ ROI convertido a formato YOLOv8")
 
     # NOTA: RECUERDA!! No todas las imágenes tienen un label.txt asociado, si una imagen no tiene un contorno asociado
     # al ROI, entonces no se crea un .txt correspondiente. 1967
+    # =========================================
+
+    # ============ VISUALIZACION ==============
+
+    data_explore.analyze_dataset(folder_paths=[
+        "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/train",
+        "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/val",
+        "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/test"
+    ], label_file_path="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/info-files"
+                       "/t2flair-study/roi-slices.txt",
+    save_path="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/info-files/t2flair"
+              "-study/images")
+
+    # =========================================
+
 
 
 if __name__ == "__main__":

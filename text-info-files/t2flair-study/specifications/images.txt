@@ -1,8 +1,0 @@
-niiFolder: /home/mariopasc/Python/Datasets/ds-epilepsy/T2flair-study-nii
-trainFolder: /home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/train
-trainNiiFiles: /home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/text-info-files/t2flair-study/holdout/train_files.txt
-valFolder: /home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/val
-valNiiFIles: /home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/text-info-files/t2flair-study/holdout/val_files.txt
-testFolder: /home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/test
-testNiiFiles: /home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/text-info-files/t2flair-study/holdout/test_files.txt
-format: PNG
