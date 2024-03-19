@@ -59,34 +59,18 @@ def main():
                                            output_txt=roi_txt)
     time.sleep(5)
     # Aplicamos ahora unos aumento de datos a solo los cortes con ROI
-    data_augmentation.apply_augmentation(num_images=5,
+    data_augmentation.apply_augmentation(num_images=1500,
                                          input_folder=t2flair_nii_path,
                                          roi_txt_file=roi_slices_txt,
                                          exclusion_file=slices_excluir,
                                          roi_folder=roi_nii_path,
                                          augmentation_method="GAMMA")
-    time.sleep(5)
-    data_augmentation.apply_augmentation(num_images=5,
+    data_augmentation.apply_augmentation(num_images=1500,
                                          input_folder=t2flair_nii_path,
                                          roi_txt_file=roi_slices_txt,
                                          exclusion_file=slices_excluir,
                                          roi_folder=roi_nii_path,
                                          augmentation_method="BRIGHTNESS")
-    time.sleep(5)
-    data_augmentation.apply_augmentation(num_images=5,
-                                         input_folder=t2flair_nii_path,
-                                         roi_txt_file=roi_slices_txt,
-                                         exclusion_file=slices_excluir,
-                                         roi_folder=roi_nii_path,
-                                         augmentation_method="TRANSLATION")
-    time.sleep(5)
-    data_augmentation.apply_augmentation(num_images=5,
-                                         input_folder=t2flair_nii_path,
-                                         roi_txt_file=roi_slices_txt,
-                                         exclusion_file=slices_excluir,
-                                         roi_folder=roi_nii_path,
-                                         augmentation_method="ROTATION")
-    time.sleep(5)
     print("✅ Aumento de datos completado")
     # =========================================
 
@@ -138,7 +122,6 @@ def main():
               "-study/images")
 
     # =========================================
-
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ import numpy as np
 import random
 import shutil
 
+
 def save_slices_with_roi(input_dir, output_txt):
     # Verificar si el directorio de entrada existe
     if not os.path.isdir(input_dir):
@@ -32,7 +33,7 @@ def save_slices_with_roi(input_dir, output_txt):
             for i in range(data.shape[2]):
                 slice_data = data[:, :, i]
                 contours, _ = cv.findContours(slice_data, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-                if len(contours) > 0: # Cuidado, solo consideramos contorno al que tiene más de 5 puntos
+                if len(contours) > 0:  # Cuidado, solo consideramos contorno al que tiene más de 5 puntos
                     if len(contours[0]) >= 5:
                         files_with_roi.append(f"{patient_folder}-{i}.nii\n")
 
@@ -41,36 +42,44 @@ def save_slices_with_roi(input_dir, output_txt):
         file.writelines(files_with_roi)
 
 
+def check_augmented_data(input_folder, patient_slice, augmentation_method):
+    """
+    Comprueba si ya existen archivos con el nombre aumentado en el directorio especificado.
+    Si es así, incrementa el número de versión para el nuevo archivo aumentado.
+    """
+    # Formato base del nombre para archivos aumentados
+    base_augmented_image_name = f"{patient_slice}-{augmentation_method.lower()}"
+
+    # Lista todos los archivos en el directorio que coinciden con el patrón base
+    matching_files = [f for f in os.listdir(input_folder) if
+                      f.startswith(base_augmented_image_name) and f.endswith('.nii')]
+
+    # Si no hay archivos coincidentes, simplemente añade '-0' antes de la extensión
+    if not matching_files:
+        return f"{base_augmented_image_name}-0.nii"
+
+    # Extrae los números de versión de los archivos existentes y encuentra el más alto
+    versions = [int(f.split('-')[-1].split('.')[0]) for f in matching_files]
+    highest_version = max(versions)
+
+    # Crea el nombre del nuevo archivo incrementando el número de versión más alto en 1
+    new_version = highest_version + 1
+    new_augmented_image_name = f"{base_augmented_image_name}-{new_version}.nii"
+
+    return new_augmented_image_name
+
+
 def copy_augmented_image_with_roi(input_folder_roi, original_image_name, augmentation_method):
     patient_slice = original_image_name.rstrip(".nii")
-    augmented_image_name = f"{patient_slice}-{augmentation_method.lower()}.nii"
+    augmented_image_name = check_augmented_data(input_folder=input_folder_roi,
+                                                patient_slice=patient_slice,
+                                                augmentation_method=augmentation_method)
     source_path = os.path.join(input_folder_roi, original_image_name)
     output_folder = os.path.join(input_folder_roi, augmented_image_name)
 
     shutil.copy2(source_path, output_folder)
     print(f"Augmented image with ROI copied to: {output_folder}")
 
-"""
-def copy_augmented_image_with_roi(input_folder_roi, original_image_name, augmentation_method):
-    patient_slice = original_image_name.rstrip(".nii")
-    # Construir el nombre de la imagen aumentada con el método especificado
-    augmented_image_name = f"{patient_slice}-{augmentation_method.lower()}.nii"
-
-    # Construir la ruta de la imagen aumentada
-    augmented_image_path = os.path.join(input_folder_roi, augmented_image_name)
-
-    # Cargar la imagen original para obtener la información de la matriz afín
-    original_image_path = os.path.join(input_folder_roi, original_image_name)
-    img = nib.load(original_image_path)
-
-    # Crear un nuevo objeto Nifti1Image con los datos aumentados y la matriz afín original
-    augmented_img = nib.Nifti1Image(img.get_fdata(), img.affine)
-
-    # Guardar la imagen aumentada con el nuevo nombre
-    nib.save(augmented_img, augmented_image_path)
-
-    print(f"Augmented image with ROI saved as: {augmented_image_path}")
-"""
 
 def gamma_correction_augmentation(image_data):
     gamma_value = random.uniform(.8, 1.2)
@@ -88,27 +97,38 @@ def brightness_augmentation(image_data):
     return modified_image
 
 
-def translation_augmentation(image_data):
+def translation_augmentation(image_data, roi_folder, image_name):
     # Generar valores aleatorios para la translación en x e y entre -20 y 20 píxelesmE G
     tx = random.randint(-10, 10)
     ty = random.randint(-10, 10)
     # Definir la matriz de transformación para la translación
     M = np.float32([[1, 0, tx], [0, 1, ty]])
+
     # Aplicar la translación a la imagen utilizando warpAffine de OpenCV
     translated_image = cv.warpAffine(image_data, M, (image_data.shape[1], image_data.shape[0]))
-    return translated_image
+
+    # Encontrar el ROI asociado a la imagen
+    roi_image = nib.load(os.path.join(roi_folder, image_name)).get_fdata()
+    translated_roi = cv.warpAffine(roi_image, M, dsize=(roi_image.shape[1], roi_image.shape[0]))
+    return translated_image, translated_roi
 
 
-def rotation_augmentation(image_data):
+def rotation_augmentation(image_data, roi_folder, image_name):
     # Generar un ángulo aleatorio entre -15 y 15 grados
     angle = random.uniform(-10, 10)
     # Obtener el centro de la imagen
     center = (image_data.shape[1] / 2, image_data.shape[0] / 2)
     # Definir la matriz de rotación
     M = cv.getRotationMatrix2D(center, angle, 1.0)
-    # Aplicar la rotación a la imagen utilizando warpAffine de OpenCV
-    rotated_image = cv.warpAffine(image_data, M, (image_data.shape[1], image_data.shape[0]))
-    return rotated_image
+
+    # Aplicar la rotación a la imagen utilizando warpAffine de OpenCV a la imagen
+    rotated_image = cv.warpAffine(image_data, M, dsize=(image_data.shape[1], image_data.shape[0]))
+
+    # Encontrar el ROI asociado a la imagen
+    roi_image = nib.load(os.path.join(roi_folder, image_name)).get_fdata()
+    rotated_roi = cv.warpAffine(roi_image, M, dsize=(roi_image.shape[1], roi_image.shape[0]))
+
+    return rotated_image, rotated_roi
 
 
 def apply_augmentation(num_images, input_folder, roi_folder, roi_txt_file, exclusion_file, augmentation_method):
@@ -152,6 +172,7 @@ def apply_augmentation(num_images, input_folder, roi_folder, roi_txt_file, exclu
         # Verificar si el número de rodaja está en el conjunto de cortes excluidos
         if slice_number in exclude_slices:
             continue  # Repetir el proceso si el corte está excluido
+
         else:
             selected_images.append(random_image)
 
@@ -164,40 +185,51 @@ def apply_augmentation(num_images, input_folder, roi_folder, roi_txt_file, exclu
         img = nib.load(image_path)
         data = img.get_fdata()
 
+        augmented_image_name = check_augmented_data(input_folder=roi_folder,
+                                                    patient_slice=patient_slice,
+                                                    augmentation_method=augmentation_method)
+
         if augmentation_method == "GAMMA":
             # Aplicar el método de aumento de datos
             augmented_data = gamma_correction_augmentation(data)
 
-            # Crear el nombre de la imagen aumentada
-            augmented_image_name = f"{patient_slice}-gamma.nii"
-
+            # Duplicar el ROI
+            copy_augmented_image_with_roi(input_folder_roi=roi_folder,
+                                          original_image_name=image_name,
+                                          augmentation_method=augmentation_method)
             print(f"Gamma augmentation applied to {augmented_image_name}")
         if augmentation_method == "BRIGHTNESS":
             # Aplicar el método de aumento de datos
             augmented_data = brightness_augmentation(data)
 
-            # Crear el nombre de la imagen aumentada
-            augmented_image_name = f"{patient_slice}-brightness.nii"
+            # Duplicar el ROI
+            copy_augmented_image_with_roi(input_folder_roi=roi_folder,
+                                          original_image_name=image_name,
+                                          augmentation_method=augmentation_method)
             print(f"Brightness augmentation applied to {augmented_image_name}")
+
         if augmentation_method == "TRANSLATION":
             # Aplicar el método de aumento de datos
-            augmented_data = translation_augmentation(data)
+            augmented_data, augmented_roi = translation_augmentation(image_data=data,
+                                                                     roi_folder=roi_folder,
+                                                                     image_name=image_name)
 
-            # Crear el nombre de la imagen aumentada
-            augmented_image_name = f"{patient_slice}-translation.nii"
+            augmented_roi_path = os.path.join(roi_folder, augmented_image_name)
+            nib.save(nib.Nifti1Image(augmented_roi, img.affine), augmented_roi_path)
+
             print(f"Translation augmentation applied to {augmented_image_name}")
+
         if augmentation_method == "ROTATION":
             # Aplicar el método de aumento de datos
-            augmented_data = rotation_augmentation(data)
+            augmented_data, augmented_roi = rotation_augmentation(image_data=data,
+                                                                  roi_folder=roi_folder,
+                                                                  image_name=image_name)
 
-            # Crear el nombre de la imagen aumentada
-            augmented_image_name = f"{patient_slice}-rotation.nii"
+            augmented_roi_path = os.path.join(roi_folder, augmented_image_name)
+            nib.save(nib.Nifti1Image(augmented_roi, img.affine), augmented_roi_path)
+
             print(f"Rotation augmentation applied to {augmented_image_name}")
 
         # Guardar la imagen aumentada
         augmented_image_path = os.path.join(input_folder, augmented_image_name)
         nib.save(nib.Nifti1Image(augmented_data, img.affine), augmented_image_path)
-        # Duplicar el ROI
-        copy_augmented_image_with_roi(input_folder_roi=roi_folder,
-                                      original_image_name=image_name,
-                                      augmentation_method=augmentation_method)

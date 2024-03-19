@@ -1,6 +1,7 @@
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 
 def analyze_dataset(folder_paths, label_file_path, save_path):
@@ -17,35 +18,56 @@ def analyze_dataset(folder_paths, label_file_path, save_path):
 
     for folder_path in folder_paths:
         labeled_count = 0
-        total_images = len(os.listdir(folder_path))
-        images = [name.rstrip(".png") for name in os.listdir(folder_path)]
-        print(images)
-        print(labeled_images)
-        for image_name in images:
-            if image_name in labeled_images:
+        total_images = 0
+        # Preparar una lista de todos los archivos antes de iniciar el bucle para poder usar tqdm
+        all_files = []
+        for root, _, files in os.walk(folder_path):
+            for name in files:
+                if name.endswith('.png'):
+                    all_files.append((root, name))
+        # Utilizar tqdm aquí para mostrar la barra de progreso
+        for root, name in tqdm(all_files, desc=f"Procesando {folder_path}"):
+            total_images += 1
+            image_base_name = name.split('.png')[0]
+            # Considerar tanto imágenes directamente etiquetadas como aquellas aumentadas
+            if any(image_base_name.startswith(labeled_image) for labeled_image in labeled_images):
                 labeled_count += 1
 
         labeled_counts.append(labeled_count)
         total_images_counts.append(total_images)
 
     labeled_percentages = np.array(labeled_counts) / np.array(total_images_counts) * 100
+    non_labeled_counts = np.array(total_images_counts) - np.array(labeled_counts)
+    non_labeled_percentages = np.array(non_labeled_counts) / np.array(total_images_counts) * 100
 
     labels = ['Train', 'Validation', 'Test']
     x = np.arange(len(labels))
-    width = 0.35
+    width = 0.20  # Ajuste el ancho para acomodar una barra adicional
 
     fig, ax = plt.subplots()
-    ax.bar(x - width / 2, total_images_counts, width, label='Total de Imágenes', color='skyblue')
-    ax.bar(x + width / 2, labeled_counts, width, label='Imágenes con Label', color='orange')
+    rects1 = ax.bar(x - width, total_images_counts, width, label='Total Images', color='skyblue')
+    rects2 = ax.bar(x, labeled_counts, width, label='Images with Label', color='orange')
+    rects3 = ax.bar(x + width, non_labeled_counts, width, label='Images without Label', color='lightgreen')
 
-    ax.set_ylabel('Número de Imágenes')
-    ax.set_title('Proporción de Imágenes con y sin Label por Conjunto')
+    ax.set_ylabel('Images Count')
+    ax.set_title('Proportion of Images with and without Label by Set')
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.legend()
 
-    for i in range(len(labels)):
-        plt.text(i, total_images_counts[i], f"{labeled_percentages[i]:.2f}%", ha='center', color='black', fontsize=12)
+    # Función para añadir etiquetas de porcentaje sobre las barras
+    def autolabel(rects, percentages):
+        for rect, pct in zip(rects, percentages):
+            height = rect.get_height()
+            ax.annotate(f'{pct:.2f}%',
+                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3),  # 3 puntos verticales de offset
+                        textcoords="offset points",
+                        ha='center', va='bottom', fontsize=9)
+
+    # Aplicar la función autolabel para añadir porcentajes de imágenes con y sin label
+    autolabel(rects2, labeled_percentages)
+    autolabel(rects3, non_labeled_percentages)
 
     fig.tight_layout()
 
@@ -54,7 +76,6 @@ def analyze_dataset(folder_paths, label_file_path, save_path):
     plt.savefig(save_file_path)
     print(f"Gráfico guardado en: {save_file_path}")
 
-    # Limpiar para evitar sobreposiciones en futuras llamadas a plot
     plt.close()
 
 
