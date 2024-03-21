@@ -1,5 +1,9 @@
 import argparse
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
 from ultralytics import YOLO
+import numpy as np
 import os
 import glob
 import csv
@@ -43,7 +47,8 @@ class SegmentationV8:
             writer = csv.writer(csvfile)
             writer.writerow(['epoch', 'file',
                              'metrics/precision(B)', 'metrics/recall(B)', 'metrics/mAP50(B)', 'metrics/mAP50-95(B)',
-                             'metrics/precision(M)', 'metrics/recall(M)', 'metrics/mAP50(M)', 'metrics/mAP50-95(M)'])
+                             'metrics/precision(M)', 'metrics/recall(M)', 'metrics/mAP50(M)', 'metrics/mAP50-95(M)',
+                             'TP', 'TN', 'FP', 'FN'])
 
             for weight_file in weights_files:
                 # Identificar si el archivo es 'best.pt' o 'last.pt'
@@ -71,15 +76,71 @@ class SegmentationV8:
                 map_05_m = results.seg.map50  # mAP para th=.5
                 map_05_95_m = results.seg.map  # mAP para th=.5-.95
 
+                conf_mat = results.confusion_matrix.matrix
+                tp = conf_mat[0][0]
+                TN = conf_mat[1][1]
+                FP = conf_mat[0][1]
+                FN = conf_mat[1][0]
+
                 writer.writerow([epoch, file_name,
                                  precision_b, recall_b, map_05_b, map_05_95_b,
-                                 precision_m, recall_m, map_05_m, map_05_95_m])
+                                 precision_m, recall_m, map_05_m, map_05_95_m,
+                                 tp, TN, FP, FN])
+
+    def val_metrics(self):
+        metrics_df = pd.read_csv(self.csv_path)
+
+        def plot_metric(df, metric_name):
+            plt.figure(figsize=(10, 5))
+            plt.plot(df['epoch'], df[metric_name], label=metric_name)
+            plt.xlabel('Epoch')
+            plt.ylabel(metric_name)
+            plt.title(f'Curve of {metric_name} per Epoch')
+            plt.legend()
+            # Guardar la gráfica en el archivo especificado
+            save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runs/segment/Yolov8-Train/")
+            plt.savefig(f"{save_path}/{metric_name}_per_epoch.png")
+            plt.close()
+
+        def plot_confusion_matrix_save(df):
+            mean_TP = round(df['TP'].mean(), 1)
+            mean_TN = round(df['TN'].mean(), 1)
+            mean_FP = round(df['FP'].mean(), 1)
+            mean_FN = round(df['FN'].mean(), 1)
+
+            confusion_matrix = np.array([[mean_TP, mean_FP],
+                                         [mean_FN, mean_TN]])
+
+            fig, ax = plt.subplots(figsize=(5, 5))
+            sns.heatmap(confusion_matrix, annot=True, fmt=".1f", linewidths=.5, square=True, cmap='Blues',
+                        xticklabels=['Predicted Positive', 'Predicted Negative'],
+                        yticklabels=['Actual Positive', 'Actual Negative'], ax=ax)
+
+            plt.title('Average Confusion Matrix', size=15)
+            plt.ylabel('Actual label', size=12)
+            plt.xlabel('Predicted label', size=12)
+            # Guardar la gráfica en el archivo especificado
+            save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runs/segment/Yolov8-Train/")
+            plt.savefig(f"{save_path}/average_confusion_matrix.png")
+            plt.close()
+
+        plot_metric(metrics_df, 'metrics/precision(M)')
+        plot_metric(metrics_df, 'metrics/recall(M)')
+        plot_metric(metrics_df, 'metrics/mAP50(M)')
+        plot_metric(metrics_df, 'metrics/mAP50-95(M)')
+        plot_metric(metrics_df, 'metrics/precision(B)')
+        plot_metric(metrics_df, 'metrics/recall(B)')
+        plot_metric(metrics_df, 'metrics/mAP50(B)')
+        plot_metric(metrics_df, 'metrics/mAP50-95(B)')
+
+        plot_confusion_matrix_save(metrics_df)
 
 
 def main(path_model, yaml_path):
     model = SegmentationV8(path_model=path_model, yaml_file=yaml_path)
     model.train_yolov8()
     model.validate_yolov8()
+    model.val_metrics()
 
 
 if __name__ == "__main__":

@@ -64,13 +64,13 @@ def main():
                                          roi_txt_file=roi_slices_txt,
                                          exclusion_file=slices_excluir,
                                          roi_folder=roi_nii_path,
-                                         augmentation_method="GAMMA")
+                                         augmentation_method="TRANSLATION")
     data_augmentation.apply_augmentation(num_images=1500,
                                          input_folder=t2flair_nii_path,
                                          roi_txt_file=roi_slices_txt,
                                          exclusion_file=slices_excluir,
                                          roi_folder=roi_nii_path,
-                                         augmentation_method="BRIGHTNESS")
+                                         augmentation_method="ROTATION")
     print("✅ Aumento de datos completado")
     # =========================================
 

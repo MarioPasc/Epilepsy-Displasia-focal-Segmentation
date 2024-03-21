@@ -33,9 +33,8 @@ def save_slices_with_roi(input_dir, output_txt):
             for i in range(data.shape[2]):
                 slice_data = data[:, :, i]
                 contours, _ = cv.findContours(slice_data, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-                if len(contours) > 0:  # Cuidado, solo consideramos contorno al que tiene más de 5 puntos
-                    if len(contours[0]) >= 5:
-                        files_with_roi.append(f"{patient_folder}-{i}.nii\n")
+                if any(len(contour) >= 5 for contour in contours):
+                    files_with_roi.append(f"{patient_folder}-{i}.nii\n")
 
     # Escribir la lista de archivos con ROI en el archivo de salida
     with open(output_txt, 'w') as file:
@@ -98,9 +97,9 @@ def brightness_augmentation(image_data):
 
 
 def translation_augmentation(image_data, roi_folder, image_name):
-    # Generar valores aleatorios para la translación en x e y entre -20 y 20 píxelesmE G
-    tx = random.randint(-10, 10)
-    ty = random.randint(-10, 10)
+    # Generar valores aleatorios para la translación en x e y entre -5 y 5 píxeles
+    tx = random.randint(-5, 5)
+    ty = random.randint(-5, 5)
     # Definir la matriz de transformación para la translación
     M = np.float32([[1, 0, tx], [0, 1, ty]])
 
@@ -114,8 +113,8 @@ def translation_augmentation(image_data, roi_folder, image_name):
 
 
 def rotation_augmentation(image_data, roi_folder, image_name):
-    # Generar un ángulo aleatorio entre -15 y 15 grados
-    angle = random.uniform(-10, 10)
+    # Generar un ángulo aleatorio entre -6 y 6 grados
+    angle = random.uniform(-6, 6)
     # Obtener el centro de la imagen
     center = (image_data.shape[1] / 2, image_data.shape[0] / 2)
     # Definir la matriz de rotación

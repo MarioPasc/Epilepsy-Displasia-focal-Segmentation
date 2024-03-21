@@ -238,21 +238,16 @@ def extract_roi_contours(input_txt):
 
 
 def contours_YOLO_format(contours, height, width, output_path):
-    if len(contours) > 0:
-        # YOLOv8 no admite contornos con menos de 2 puntos (tag + x1+y1+x2+y2 = 5)
-        if len(contours[0]) >= 5:
-            with open(output_path, 'w') as f:
-                for i, contorno in enumerate(contours):
-                    # Normalizar coordenadas del contorno
-                    normalized = contorno.squeeze() / np.array([width, height])
-                    # Convertir a formato YOLO
+    if any(len(contour) >= 5 for contour in contours):
+        with open(output_path, 'w') as f:
+            for contour in contours:
+                if len(contour) >= 5:  # Comprobar cada contorno individualmente
+                    # Aplanar y normalizar las coordenadas del contorno
+                    normalized = contour.squeeze().astype('float') / np.array([width, height])
+                    # Convertir coordenadas normalizadas a strings con 6 dígitos decimales
                     str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
-                    # Escribir etiqueta 0 y coordenadas
+                    # Escribir en el archivo con la etiqueta 0 y las coordenadas normalizadas
                     f.write(f"0 {str_contour}\n")
-        else:
-            return
-    else:
-        return
 
 
 
