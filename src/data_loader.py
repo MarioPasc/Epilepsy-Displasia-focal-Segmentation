@@ -97,11 +97,13 @@ class HoldOut:
         nii_volume = nib.load(nii_path)
         nii_data = nii_volume.get_fdata()
         id_patient = (nii_path.split('/')[-1]).split("_")[0]
+        exclude = list(range(0, 121)) + list(range(220, 257))
         for i in range(nii_data.shape[2]):
-            # Temporal normalization
-            slice_normalized = cv2.normalize(nii_data[:, :, i], None, 0, 255, cv2.NORM_MINMAX)
-            slice_uint8 = np.uint8(slice_normalized)
-            cv2.imwrite(os.path.join(output_path, f'{id_patient}_slice-{i}.png'), slice_uint8)
+            if i not in exclude:
+                # Temporal normalization
+                slice_normalized = cv2.normalize(nii_data[:, :, i], None, 0, 255, cv2.NORM_MINMAX)
+                slice_uint8 = np.uint8(slice_normalized)
+                cv2.imwrite(os.path.join(output_path, f'{id_patient}_slice-{i}.png'), slice_uint8)
             
     def __holdout__(self):
         # Create folder structure
@@ -128,14 +130,13 @@ class HoldOut:
     
 
 def main():
-    """
     dl_instance = DataLoader(dataset_path="/home/mario/VSCode/Dataset/epilepsy")
     dl_instance.find_patients_with_roi()
     dl_instance.organize_patients_data()
     holdout_instance = HoldOut(dataset_path="/home/mario/VSCode/Dataset/ds-epilepsy",
                                study_name="T2FLAIR", val_percent=.2, test_percent=.1)
     print(f"Train: {holdout_instance.train_set}\nVal: {holdout_instance.val_set}\nTest: {holdout_instance.test_set}")
-    """
+    
     
 
 if __name__=="__main__":
