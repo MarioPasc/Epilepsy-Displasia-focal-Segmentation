@@ -2,14 +2,9 @@
 
 # Definir las carpetas a limpiar
 folders=(
-    "/home/mariopasc/Python/Datasets/ds-epilepsy/T2flair-study-nii"
-    "/home/mariopasc/Python/Datasets/ds-epilepsy/roi-nii"
-    "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/train"
-    "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/val"
-    "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/images/test"
-    "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/labels/train"
-    "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/labels/val"
-    "/home/mariopasc/Python/Datasets/t2flair-yolov8-ds/labels/test"
+    "/home/mario/VSCode/Dataset/ds-epilepsy/T2FLAIR",
+    "/home/mario/VSCode/Dataset/ds-epilepsy/ROI",
+    "/home/mario/VSCode/Dataset/ds-epilepsy/T1WEIGHTED"
 )
 
 # Eliminar los archivos dentro de cada carpeta

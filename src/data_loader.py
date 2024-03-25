@@ -1,8 +1,4 @@
 import os
-import numpy as np
-import cv2 as cv
-import nibabel as nib
-from tqdm import tqdm
 import glob
 from sklearn.model_selection import train_test_split
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -10,7 +6,6 @@ from typing import List, Optional
 import shutil
 
 class DataLoader:
-
     def __init__(self, dataset_path: str) -> None:
         self.dataset_path = dataset_path
         self.patients_roi: List[str] = []
@@ -45,11 +40,11 @@ class DataLoader:
         for patient in self.patients_roi:
             anat_path = os.path.join(self.dataset_path, patient, 'anat')
             for file in os.listdir(anat_path):
-                if 'roi' in file.lower():
+                if ('roi' in file.lower() and file.endswith('.nii.gz')):
                     shutil.copy(os.path.join(anat_path, file), os.path.join(base_path, "ROI"))
-                elif 't2' in file.lower():
+                elif (('t2' in file.lower() or 'flair' in file.lower()) and file.endswith('.nii.gz')):
                     shutil.copy(os.path.join(anat_path, file), os.path.join(base_path, "T2FLAIR"))
-                elif 't1' in file.lower():
+                elif ('t1' in file.lower() and file.endswith('.nii.gz')):
                     shutil.copy(os.path.join(anat_path, file), os.path.join(base_path, "T1WEIGHTED"))
 
 
