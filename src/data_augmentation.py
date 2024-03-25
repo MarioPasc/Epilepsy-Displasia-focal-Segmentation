@@ -1,5 +1,5 @@
 import os
-import cv2 as cv
+import cv2
 import nibabel as nib
 import numpy as np
 import random
@@ -29,7 +29,7 @@ class DataAugmentation:
         for i in range(roi_data.shape[2]):
             slice_data = roi_data[:, :, i]
             slice_data = np.array(slice_data, dtype=np.uint8)
-            contours, _ = cv.findContours(slice_data, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(slice_data, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours and math.ceil(len(contours[0])/2) > 3:
                 valid_slices.append(i)
         
@@ -90,14 +90,14 @@ class DataAugmentation:
         tx = random.randint(-5, 5)
         ty = random.randint(-5, 5)
         M = np.float32([[1, 0, tx], [0, 1, ty]])
-        shifted_study_slice = cv.warpAffine(study_slice, M, (study_slice.shape[1], study_slice.shape[0]), borderMode=cv.BORDER_REFLECT)
-        shifted_roi_slice = cv.warpAffine(roi_slice, M, (roi_slice.shape[1], roi_slice.shape[0]), borderMode=cv.BORDER_REFLECT)
+        shifted_study_slice = cv2.warpAffine(study_slice, M, (study_slice.shape[1], study_slice.shape[0]), borderMode=cv2.BORDER_REFLECT)
+        shifted_roi_slice = cv2.warpAffine(roi_slice, M, (roi_slice.shape[1], roi_slice.shape[0]), borderMode=cv2.BORDER_REFLECT)
         return shifted_study_slice, shifted_roi_slice
 
     def _flip(self, study_slice: np.ndarray, roi_slice: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # Realizar un flip horizontal (de derecha a izquierda) en la imagen y en el ROI
-        flipped_study_slice = cv.flip(study_slice, 1)
-        flipped_roi_slice = cv.flip(roi_slice, 1)
+        flipped_study_slice = cv2.flip(study_slice, 1)
+        flipped_roi_slice = cv2.flip(roi_slice, 1)
         return flipped_study_slice, flipped_roi_slice
 
     def _apply_and_save_augmentation(self, patient_id: str, augmentation_type: str) -> None:
