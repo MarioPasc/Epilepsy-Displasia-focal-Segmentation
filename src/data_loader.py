@@ -8,6 +8,7 @@ import nibabel as nib
 import cv2
 import numpy as np
 from tqdm import tqdm
+import math
 
 class DataLoader:
     def __init__(self, dataset_path: str) -> None:
@@ -56,11 +57,12 @@ class DataLoader:
 
 
 class HoldOut:
-    def __init__(self, dataset_path: str, study_name: str, val_percent: float, test_percent: float) -> None:
+    def __init__(self, dataset_path: str, study_name: str, roi_study: str, val_percent: float, test_percent: float) -> None:
         self.train_set: List[str] = []
         self.val_set: List[str] = []
         self.test_set: List[str] = []
         
+        self.roi_study = roi_study
         self.study_name = study_name
         self.val_percent = val_percent
         self.test_percent = test_percent
@@ -104,7 +106,31 @@ class HoldOut:
                 slice_normalized = cv2.normalize(nii_data[:, :, i], None, 0, 255, cv2.NORM_MINMAX)
                 slice_uint8 = np.uint8(slice_normalized)
                 cv2.imwrite(os.path.join(output_path, f'{id_patient}_slice-{i}.png'), slice_uint8)
-            
+    
+    def __contoursYOLO__(self, contours: List[List[int]], height: int, width: int, output_path: str):
+            with open(output_path, 'w') as f:
+                for contour in contours:
+                    normalized = contour.squeeze().astype('float') / np.array([width, height])
+                    str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
+                    f.write(f"0 {str_contour}\n")
+
+    def __roiContours__(self, nii_path: str, output_path: str):
+        roi_path = os.path.join(self.dataset_path, self.roi_study)
+        # Obtain the corresponding ROI niigz file
+        id_patient = (nii_path.split('/')[-1]).split("_")[0]
+        file = os.path.join(roi_path, glob.glob(os.path.join(roi_path, f"{id_patient}*.nii.gz"))[0])
+        roi_niigz = nib.load(os.path.join(roi_path, file)).get_fdata()
+        for i in range(roi_niigz.shape[2]):
+            slice = roi_niigz[:, :, i].astype(np.uint8)
+            contours, _ = cv2.findContours(slice, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # Extract the contours that have at least 3 points : [[x1, y1], [x2, y2], [x3, y3], ...]
+            contours = [contour for contour in contours if len(contour) >= 3]  
+            if contours: 
+                self.__contoursYOLO__(contours=contours,
+                                    height=slice.shape[0],
+                                    width=slice.shape[1],
+                                    output_path=os.path.join(output_path, f"{id_patient}_slice-{i}.txt"))
+
     def __holdout__(self):
         # Create folder structure
         base_path = os.path.join(self.dataset_path, "..", f"{self.study_name}-ds-epilepsy")
@@ -113,20 +139,27 @@ class HoldOut:
             for data_type in ["images", "labels"]:
                 for folder in ["train", "val", "test"]:
                     os.makedirs(os.path.join(base_path, data_type, folder), exist_ok=True)
-        # Copy niigz files as png in their respective holdout folder
+        # 1. Copy niigz files as png in their respective holdout folder
+        # 2. Extract ROI contours and save them in their respective holdout folder
         study_path = os.path.join(self.dataset_path, self.study_name)
         nifti_files = os.listdir(study_path)
         for niigz_file in tqdm(nifti_files, desc="Processing NIfTI files"):
             nii_path = os.path.join(study_path, niigz_file)
             if niigz_file in self.train_set:
-                output_path = os.path.join(base_path, "images", "train")
+                image_output_path = os.path.join(base_path, "images", "train")
+                label_output_path = os.path.join(base_path, "labels", "train")
             elif niigz_file in self.val_set:
-                output_path = os.path.join(base_path, "images", "val")
+                image_output_path = os.path.join(base_path, "images", "val")
+                label_output_path = os.path.join(base_path, "labels", "val")
             elif niigz_file in self.test_set:
-                output_path = os.path.join(base_path, "images", "test")
+                image_output_path = os.path.join(base_path, "images", "test")
+                label_output_path = os.path.join(base_path, "labels", "test")
             else:
                 continue
-            self.__niiPng__(nii_path=nii_path, output_path=output_path)
+            
+            self.__niiPng__(nii_path=nii_path, output_path=image_output_path)
+            self.__roiContours__(nii_path=nii_path,output_path=label_output_path)
+
     
 
 def main():
@@ -134,7 +167,7 @@ def main():
     dl_instance.find_patients_with_roi()
     dl_instance.organize_patients_data()
     holdout_instance = HoldOut(dataset_path="/home/mario/VSCode/Dataset/ds-epilepsy",
-                               study_name="T2FLAIR", val_percent=.2, test_percent=.1)
+                               study_name="T2FLAIR", roi_study = "ROI_T2", val_percent=.2, test_percent=.1)
     print(f"Train: {holdout_instance.train_set}\nVal: {holdout_instance.val_set}\nTest: {holdout_instance.test_set}")
     
     
