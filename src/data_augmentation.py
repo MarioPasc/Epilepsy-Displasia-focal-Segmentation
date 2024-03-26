@@ -3,7 +3,6 @@ import cv2
 import nibabel as nib
 import numpy as np
 import random
-import shutil
 from tqdm import tqdm
 import glob
 from typing import Dict, List, Tuple
@@ -17,10 +16,11 @@ class DataAugmentation:
         self.study_path = study_path
         self.roi_path = roi_path
         self.valid_roi_slices: Dict[str, List[int]] = {}
+        self.__find_valid_roi_slices__()
     
     # Find valid slices for each patient. We consider a slice as valir 
     # if its corresponding roi's contour has at least 5 points
-    def process_roi_file(self, roi_file: str) -> Tuple[str, List[int]]:
+    def __process_roi_file__(self, roi_file: str) -> Tuple[str, List[int]]:
         valid_slices = []
         roi_path = os.path.join(self.roi_path, roi_file)
         roi_img = nib.load(roi_path)
@@ -37,13 +37,13 @@ class DataAugmentation:
         return (patient_id, valid_slices)
 
     # Apply the function process_roi_file concurrently 
-    def find_valid_roi_slices(self) -> None:
+    def __find_valid_roi_slices__(self) -> None:
         with ThreadPoolExecutor() as executor:
             futures = []
 
             for roi_file in os.listdir(self.roi_path):
                 if roi_file.endswith('.nii.gz'):
-                    futures.append(executor.submit(self.process_roi_file, roi_file))
+                    futures.append(executor.submit(self.__process_roi_file__, roi_file))
 
             for future in as_completed(futures):
                 patient_id, valid_slices = future.result()
@@ -136,11 +136,9 @@ class DataAugmentation:
                 transformed_study_slice, transformed_roi_slice = self._gamma(study_data[:, :, slice_index], roi_data[:, :, slice_index])
             transformed_study_slices.append(transformed_study_slice)
             transformed_roi_slices.append(transformed_roi_slice)
-        # Convertir listas de cortes transformados a arrays 3D
         transformed_study_volume = np.stack(transformed_study_slices, axis=-1) if transformed_study_slices else np.array([])
         transformed_roi_volume = np.stack(transformed_roi_slices, axis=-1) if transformed_roi_slices else np.array([])
 
-        # Guardar los volúmenes transformados como nuevos archivos .nii.gz
         if transformed_study_volume.any():
             self._save_transformed_volume(patient_id, transformed_study_volume, study_volume.affine, "study", augmentation_type)
         if transformed_roi_volume.any():
@@ -157,7 +155,6 @@ class DataAugmentation:
 def main():
     dataaug_instance = DataAugmentation(study_path="/home/mario/VSCode/Dataset/ds-epilepsy/T2FLAIR",
                                         roi_path="/home/mario/VSCode/Dataset/ds-epilepsy/ROI")
-    dataaug_instance.find_valid_roi_slices()
     dataaug_instance.apply_augmentations(["brightness"])
     
     

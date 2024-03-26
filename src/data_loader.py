@@ -14,28 +14,30 @@ class DataLoader:
     def __init__(self, dataset_path: str) -> None:
         self.dataset_path = dataset_path
         self.patients_roi: List[str] = []
-        
+        self.__find_patients_with_roi__()
+        self.__organize_patients_data__()
+
     @staticmethod
-    def check_patient_for_roi(anat_path: str) -> Optional[str]:
+    def __check_patient_for_roi__(anat_path: str) -> Optional[str]:
         roi_files = glob.glob(os.path.join(anat_path, '*roi*.nii.gz'))
         if roi_files:
             return os.path.basename(os.path.dirname(anat_path))
 
-    def find_patients_with_roi(self) -> List[str]:
+    def __find_patients_with_roi__(self) -> List[str]:
         with ThreadPoolExecutor() as executor:
             futures = []
 
             for patient_folder in os.listdir(self.dataset_path):
                 anat_path = os.path.join(self.dataset_path, patient_folder, 'anat')
                 if os.path.isdir(anat_path):
-                    futures.append(executor.submit(DataLoader.check_patient_for_roi, anat_path))
+                    futures.append(executor.submit(DataLoader.__check_patient_for_roi__, anat_path))
 
             for future in as_completed(futures):
                 result = future.result()
                 if result:
                     self.patients_roi.append(result)
 
-    def organize_patients_data(self) -> None:
+    def __organize_patients_data__(self) -> None:
         base_path = os.path.join(self.dataset_path, "..", "ds-epilepsy")
         if (not os.path.exists(base_path)):
             os.makedirs(base_path, exist_ok=True)
@@ -143,7 +145,7 @@ class HoldOut:
         # 2. Extract ROI contours and save them in their respective holdout folder
         study_path = os.path.join(self.dataset_path, self.study_name)
         nifti_files = os.listdir(study_path)
-        for niigz_file in tqdm(nifti_files, desc="Processing NIfTI files"):
+        for niigz_file in tqdm(nifti_files, desc="Generating YOLO dataset"):
             nii_path = os.path.join(study_path, niigz_file)
             if niigz_file in self.train_set:
                 image_output_path = os.path.join(base_path, "images", "train")
@@ -164,12 +166,8 @@ class HoldOut:
 
 def main():
     dl_instance = DataLoader(dataset_path="/home/mario/VSCode/Dataset/epilepsy")
-    dl_instance.find_patients_with_roi()
-    dl_instance.organize_patients_data()
     holdout_instance = HoldOut(dataset_path="/home/mario/VSCode/Dataset/ds-epilepsy",
-                               study_name="T2FLAIR", roi_study = "ROI_T2", val_percent=.2, test_percent=.1)
-    print(f"Train: {holdout_instance.train_set}\nVal: {holdout_instance.val_set}\nTest: {holdout_instance.test_set}")
-    
+                               study_name="T2FLAIR", roi_study = "ROI_T2", val_percent=.2, test_percent=.1)    
     
 
 if __name__=="__main__":
