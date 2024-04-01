@@ -1,226 +1,175 @@
 import os
-import numpy as np
-import cv2 as cv
-import nibabel as nib
+import glob
 from sklearn.model_selection import train_test_split
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Optional
+import shutil
+import nibabel as nib
+import cv2
+import numpy as np
+from tqdm import tqdm
 import math
 
 
-# Esta función convierte un estudio nii.gz a diversas imágenes .nii, asociando como nombre
-# de las imágenes idpaciente-slice.nii.
-# VER2: Se añade también un parámetro de entrada que es una lista de rodajas que no se deben incluir
-def convert_gz_nii(niigz_file, save_path, path_excluir, patient_id):
-    # Verificar si el archivo .nii.gz existe
-    if not os.path.isfile(niigz_file):
-        print("Error: Specified .nii.gz file doesn't exist.")
-        return
-    # Creamos el vector con las rodajas a exlcuir
-    exclude_slices = []
-    # Si existe el archivo .txt, rellenamos el vector con las rodajas que hay que excluir
-    # Si no existe, se asume que se incluyen todas.
-    if os.path.isfile(path_excluir):
-        with open(path_excluir, 'r') as archivo:
-            exclude_slices = [int(linea.strip()) for linea in archivo]
+class DataLoader:
+    def __init__(self, dataset_path: str) -> None:
+        self.dataset_path = dataset_path
+        self.patients_roi: List[str] = []
+        self.__find_patients_with_roi__()
+        self.__organize_patients_data__()
 
-    # Cargar el archivo .nii.gz
-    try:
-        img = nib.load(niigz_file)
-    except FileNotFoundError:
-        print(f"Error: {niigz_file} not found.")
-        return
-    except Exception as e:
-        print(f"Error loading {niigz_file}: {e}")
-        return
+    @staticmethod
+    def __check_patient_for_roi__(anat_path: str) -> Optional[str]:
+        roi_files = glob.glob(os.path.join(anat_path, '*roi*.nii.gz'))
+        if roi_files:
+            return os.path.basename(os.path.dirname(anat_path))
 
-    data = img.get_fdata()
-    # Obtener el número de rodajas
-    num_slices = data.shape[2]
+    def __find_patients_with_roi__(self) -> List[str]:
+        with ThreadPoolExecutor() as executor:
+            futures = []
 
-    # Crear el directorio de destino si no existe
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
+            for patient_folder in os.listdir(self.dataset_path):
+                anat_path = os.path.join(self.dataset_path, patient_folder, 'anat')
+                if os.path.isdir(anat_path):
+                    futures.append(executor.submit(DataLoader.__check_patient_for_roi__, anat_path))
 
-    # Iterar sobre todas las rodajas y guardarlas como imágenes .nii
-    for i in range(num_slices):
-        # Verificar si la rodaja está en la lista de exclusión
-        if i in exclude_slices:
-            continue  # Saltar esta rodaja
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    self.patients_roi.append(result)
 
-        # Obtener una sola rodaja
-        slice_data = data[:, :, i]
-        # Crear el nombre de la imagen
-        image_name = f"{patient_id}-{i}.nii"
-        # Guardar la imagen .nii
-        nib.save(nib.Nifti1Image(slice_data, img.affine), os.path.join(save_path, image_name))
+    def __organize_patients_data__(self) -> None:
+        base_path = os.path.join(self.dataset_path, "..", "ds-epilepsy")
+        if (not os.path.exists(base_path)):
+            os.makedirs(base_path, exist_ok=True)
+            for folder in ["T2FLAIR", "T1WEIGHTED", "ROI_T2", "ROI_T1"]:
+                os.makedirs(os.path.join(base_path, folder), exist_ok=True)
 
-
-def convert_patient_nii(patient_id, study_path, save_path, path_excluir):
-    patient_folder = os.path.join(study_path, patient_id)
-    niigz_files = [path for path in os.listdir(patient_folder) if path.endswith(".nii.gz")]
-    if niigz_files:
-        niigz_file = os.path.join(patient_folder, niigz_files[0])
-        convert_gz_nii(niigz_file=niigz_file, save_path=save_path, patient_id=patient_id, path_excluir=path_excluir)
+        for patient in self.patients_roi:
+            anat_path = os.path.join(self.dataset_path, patient, 'anat')
+            for file in os.listdir(anat_path):
+                if ('roi' in file.lower() and file.endswith('.nii.gz')):
+                    shutil.copy(os.path.join(anat_path, file), os.path.join(base_path, "ROI_T1"))
+                elif (('t2' in file.lower() or 'tse3dvfl' in file.lower()) and file.endswith('.nii.gz')):
+                    shutil.copy(os.path.join(anat_path, file), os.path.join(base_path, "T2FLAIR"))
+                elif ('t1' in file.lower() and file.endswith('.nii.gz')):
+                    shutil.copy(os.path.join(anat_path, file), os.path.join(base_path, "T1WEIGHTED"))
+            for file in os.listdir(os.path.join(base_path, "ROI_T1")):
+                if ('t2' in file.lower() or 'tse3dvfl' in file.lower()):
+                    shutil.copy(os.path.join(base_path, "ROI_T1", file), os.path.join(base_path, "ROI_T2"))
 
 
-def study_to_nii(study_path, save_path, path_excluir):
-    if not os.path.exists(study_path):
-        print("Input file does not exist")
-        return
+class HoldOut:
+    def __init__(self, dataset_path: str, study_name: str, roi_study: str, val_percent: float,
+                 test_percent: float) -> None:
+        self.train_set: List[str] = []
+        self.val_set: List[str] = []
+        self.test_set: List[str] = []
 
-    patient_ids = [patient_id for patient_id in os.listdir(study_path) if
-                   os.path.isdir(os.path.join(study_path, patient_id))]
+        self.roi_study = roi_study
+        self.study_name = study_name
+        self.val_percent = val_percent
+        self.test_percent = test_percent
+        self.dataset_path = dataset_path
+        self.__holdoutNiigz__()
+        self.__holdout__()
 
-    with ThreadPoolExecutor() as executor:
-        executor.map(convert_patient_nii, patient_ids, [study_path] * len(patient_ids),
-                     [save_path] * len(patient_ids),
-                     [path_excluir] * len(patient_ids))
+    def __holdoutNiigz__(self) -> None:
+        self.train_set.clear()
+        self.val_set.clear()
+        self.test_set.clear()
+        # Access the .nii.gz study files
+        folder_path = os.path.join(self.dataset_path, self.study_name)
+        niigz_files = [file for file in os.listdir(folder_path) if file.endswith('.nii.gz')]
+        # Split
+        val_test_size = self.val_percent + self.test_percent
+        train_files, val_test_files = train_test_split(niigz_files, test_size=val_test_size, random_state=42)
+        val_files, test_files = train_test_split(val_test_files, test_size=self.test_percent / val_test_size,
+                                                 random_state=42)
 
-    print(f"Estudio {study_path} convertido a nii")
+        self.train_set.extend(train_files)
+        self.val_set.extend(val_files)
+        self.test_set.extend(test_files)
 
+        # Check wether if the sum of all *_set files is the same as the study files
 
-# Esta función toma como entrada una carpeta con imágenes .nii y las guarda en la carpeta de destino
-# en el formato especificado.
-def convert_nii_image_holdout(input_txt):
-    # Verificar si el archivo .txt existe
-    if not os.path.isfile(input_txt):
-        print("Input txt file does not exist.")
-        return
+        if len(niigz_files) == len(self.train_set) + len(self.val_set) + len(self.test_set):
+            print("Hold-out ended successfully.")
+        else:
+            print(f"Hold-out error. The total file amount is {len(niigz_files)}" +
+                  "and the sum of all sets is {len(self.train_set) + len(self.val_set) + len(self.test_set)}.")
 
-    # Leer el archivo .txt
-    with open(input_txt, 'r') as file:
-        lines = file.readlines()
+    def __niiPng__(self, nii_path: str, output_path: str) -> None:
+        nii_volume = nib.load(nii_path)
+        nii_data = nii_volume.get_fdata()
+        id_patient = (nii_path.split('/')[-1]).split("_")[0]
+        exclude = list(range(0, 121)) + list(range(220, 257))
+        for i in range(nii_data.shape[2]):
+            if i not in exclude:
+                # Temporal normalization
+                slice_normalized = cv2.normalize(nii_data[:, :, i], None, 0, 255, cv2.NORM_MINMAX)
+                slice_uint8 = np.uint8(slice_normalized)
+                cv2.imwrite(os.path.join(output_path, f'{id_patient}_slice-{i}.png'), slice_uint8)
 
-    # Obtener las rutas de los folders y archivos
-    nii_folder = lines[0].split(':')[1].strip()
-    train_folder = lines[1].split(':')[1].strip()
-    train_nii_files = lines[2].split(':')[1].strip()
-    val_folder = lines[3].split(':')[1].strip()
-    val_nii_files = lines[4].split(':')[1].strip()
-    test_folder = lines[5].split(':')[1].strip()
-    test_nii_files = lines[6].split(':')[1].strip()
-    imformat = lines[7].split(':')[1].strip().lower()
+    def __contoursYOLO__(self, contours: List[List[int]], height: int, width: int, output_path: str):
+        with open(output_path, 'w') as f:
+            for contour in contours:
+                normalized = contour.squeeze().astype('float') / np.array([width, height])
+                str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
+                f.write(f"0 {str_contour}\n")
 
-    # Función para convertir .nii a imagen
-    def convert_to_image(nii_files, folder):
-        for nii_file in nii_files:
-            # Cargar el archivo .nii
-            img = nib.load(os.path.join(nii_folder, nii_file))
-            data = img.get_fdata()
+    def __roiContours__(self, nii_path: str, output_path: str):
+        roi_path = os.path.join(self.dataset_path, self.roi_study)
+        # Obtain the corresponding ROI niigz file
+        id_patient = (nii_path.split('/')[-1]).split("_")[0]
+        file = os.path.join(roi_path, glob.glob(os.path.join(roi_path, f"{id_patient}*.nii.gz"))[0])
+        roi_niigz = nib.load(os.path.join(roi_path, file)).get_fdata()
+        for i in range(roi_niigz.shape[2]):
+            slice = roi_niigz[:, :, i].astype(np.uint8)
+            contours, _ = cv2.findContours(slice, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # Extract the contours that have at least 3 points : [[x1, y1], [x2, y2], [x3, y3], ...]
+            contours = [contour for contour in contours if len(contour) >= 3]
+            if contours:
+                self.__contoursYOLO__(contours=contours,
+                                      height=slice.shape[0],
+                                      width=slice.shape[1],
+                                      output_path=os.path.join(output_path, f"{id_patient}_slice-{i}.txt"))
 
-            # Verificar si hay valores no válidos en los datos
-            if np.any(np.isnan(data)) or np.any(np.isinf(data)):
-                print(f"Skipping {nii_file}: Invalid values encountered.")
+    def __holdout__(self):
+        # Create folder structure
+        base_path = os.path.join(self.dataset_path, "..", f"{self.study_name}-ds-epilepsy")
+        if (not os.path.exists(base_path)):
+            os.makedirs(base_path, exist_ok=True)
+            for data_type in ["images", "labels"]:
+                for folder in ["train", "val", "test"]:
+                    os.makedirs(os.path.join(base_path, data_type, folder), exist_ok=True)
+        # 1. Copy niigz files as png in their respective holdout folder
+        # 2. Extract ROI contours and save them in their respective holdout folder
+        study_path = os.path.join(self.dataset_path, self.study_name)
+        nifti_files = os.listdir(study_path)
+        for niigz_file in tqdm(nifti_files, desc="Generating YOLO dataset"):
+            nii_path = os.path.join(study_path, niigz_file)
+            if niigz_file in self.train_set:
+                image_output_path = os.path.join(base_path, "images", "train")
+                label_output_path = os.path.join(base_path, "labels", "train")
+            elif niigz_file in self.val_set:
+                image_output_path = os.path.join(base_path, "images", "val")
+                label_output_path = os.path.join(base_path, "labels", "val")
+            elif niigz_file in self.test_set:
+                image_output_path = os.path.join(base_path, "images", "test")
+                label_output_path = os.path.join(base_path, "labels", "test")
+            else:
                 continue
 
-            # ========== NORMALIZACIÓN PROVISIONAL ==========
-            # Normalizar los valores de píxel para que estén entre 0 y 255
-            data_normalized = ((data - np.min(data)) / (np.max(data) - np.min(data)) * 255).astype(np.uint8)
-            # ========== FIN NORMALIZACIÓN PROVISIONAL ======
-
-            # Obtener el nombre del archivo sin la extensión .nii
-            file_name, _ = os.path.splitext(nii_file)
-            # Crear el nombre de la imagen con el formato especificado
-            image_name = f"{file_name}.{imformat}"
-            # Guardar la imagen en el formato especificado
-            cv.imwrite(os.path.join(folder, image_name), data_normalized)
-
-    # Obtener los nombres de archivos .nii para train, val y test
-    train_nii_files = [file.strip() for file in open(train_nii_files, 'r').readlines()]
-    val_nii_files = [file.strip() for file in open(val_nii_files, 'r').readlines()]
-    test_nii_files = [file.strip() for file in open(test_nii_files, 'r').readlines()]
-
-    # Convertir .nii a imágenes para train, val y test
-    convert_to_image(train_nii_files, train_folder)
-    convert_to_image(val_nii_files, val_folder)
-    convert_to_image(test_nii_files, test_folder)
-
-    print("Holdout realizado")
+            self.__niiPng__(nii_path=nii_path, output_path=image_output_path)
+            self.__roiContours__(nii_path=nii_path, output_path=label_output_path)
 
 
-# Esta función se encarga del hold out (gracias a dios que existe scikit-learn)
-def holdout_nii_images(folder_path, val_percent, test_percent, output_path):
-    # Obtener la lista de archivos .nii en la carpeta
-    nii_files = [file for file in os.listdir(folder_path) if file.endswith('.nii')]
-
-    # Dividir los nombres de los archivos en train, val y test
-    train_files, val_test_files = train_test_split(nii_files, test_size=(val_percent + test_percent), random_state=42)
-    val_files, test_files = train_test_split(val_test_files, test_size=test_percent / (val_percent + test_percent),
-                                             random_state=42)
-
-    # Escribir los nombres de los archivos en archivos de texto
-    def write_to_txt(file_list, txt_path):
-        with open(txt_path, 'w') as file:
-            for file_name in file_list:
-                file.write(file_name + '\n')
-
-    write_to_txt(train_files, os.path.join(output_path, 'train_files.txt'))
-    write_to_txt(val_files, os.path.join(output_path, 'val_files.txt'))
-    write_to_txt(test_files, os.path.join(output_path, 'test_files.txt'))
-
-    print("Train-Test-Val split realizado")
+def main():
+    dl_instance = DataLoader(dataset_path="/home/mario/VSCode/Dataset/epilepsy")
+    holdout_instance = HoldOut(dataset_path="/home/mario/VSCode/Dataset/ds-epilepsy",
+                               study_name="T2FLAIR", roi_study="ROI_T2", val_percent=.2, test_percent=.1)
 
 
-def extract_roi_contours(input_txt):
-    # Verificar si el archivo .txt existe
-    if not os.path.isfile(input_txt):
-        print("Input txt file does not exist.")
-        return
-
-    # Leer el archivo .txt
-    with open(input_txt, 'r') as file:
-        lines = file.readlines()
-
-    # Obtener las rutas de los folders y archivos
-    nii_folder = lines[0].split(':')[1].strip()
-    train_folder = lines[1].split(':')[1].strip()
-    train_nii_files = lines[2].split(':')[1].strip()
-    val_folder = lines[3].split(':')[1].strip()
-    val_nii_files = lines[4].split(':')[1].strip()
-    test_folder = lines[5].split(':')[1].strip()
-    test_nii_files = lines[6].split(':')[1].strip()
-
-    # Función para extraer y guardar contornos
-    def save_contours(nii_files, folder):
-        for nii_file in nii_files:
-            # Cargar el archivo .nii
-            img = nib.load(os.path.join(nii_folder, nii_file))
-            data = img.get_fdata()
-
-            # Obtener los contornos utilizando cv.findContours
-            contours, _ = cv.findContours(data.astype(np.uint8), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-
-            # Obtener las dimensiones de la imagen
-            # Cuidado... que las dimensiones de YOLO parecen estar cambiadas
-            # así parece funcionar bien, todas las coordenadas están entre 0 y 1
-            width = data.shape[1]
-            height = data.shape[0]
-
-            # Guardar los contornos en formato YOLO
-            output_path = os.path.join(folder, f"{nii_file.strip('.nii')}.txt")
-            contours_YOLO_format(contours=contours, height=height, width=width, output_path=output_path)
-
-    # Obtener los nombres de archivos .nii para train, val y test
-    train_nii_files = [file.strip() for file in open(train_nii_files, 'r').readlines()]
-    val_nii_files = [file.strip() for file in open(val_nii_files, 'r').readlines()]
-    test_nii_files = [file.strip() for file in open(test_nii_files, 'r').readlines()]
-
-    # Extraer y guardar contornos para train, val y test
-    save_contours(train_nii_files, train_folder)
-    save_contours(val_nii_files, val_folder)
-    save_contours(test_nii_files, test_folder)
-
-    print("Contornos ROI guardados en formato YOLO")
-
-
-def contours_YOLO_format(contours, height, width, output_path):
-    if len(contours) > 0:  # There are contours in the ROI
-        if math.ceil(len(contours[0]) / 2) >= 3: # There are at least 3 tuples <x, y> in the ROI
-            with open(output_path, 'w') as f:
-                for contour in contours:
-                    # Aplanar y normalizar las coordenadas del contorno
-                    normalized = contour.squeeze().astype('float') / np.array([width, height])
-                    # Convertir coordenadas normalizadas a strings con 6 dígitos decimales
-                    str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
-                    # Escribir en el archivo con la etiqueta 0 y las coordenadas normalizadas
-                    f.write(f"0 {str_contour}\n")
+if __name__ == "__main__":
+    main()

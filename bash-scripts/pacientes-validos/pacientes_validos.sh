@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Ruta al fichero de entrada con los nombres de las carpetas
-input_file="/home/mariopasc/Python/Projects/BSC_final/epilepsy_segment/bash-scripts/pacientes-validos"
+input_file="/home/mario/VSCode/Projects/Epilepsy-Displasia-focal-Segmentation/bash-scripts/pacientes-validos"
 
 # Directorio de origen
-source_dir="/home/mariopasc/Python/Datasets/ds004199-download"
+source_dir="/home/mario/VSCode/Dataset/epilepsy"
 
 # Directorio de destino
-destination_dir="/home/mariopasc/Python/Datasets/ds-epilepsy"
+destination_dir="/home/mario/VSCode/Dataset/ds-epilepsy"
 
 # Verifica si el directorio de destino existe, si no, créalo
 if [ ! -d "$destination_dir" ]; then
