@@ -99,39 +99,47 @@ class HoldOut:
                   "and the sum of all sets is {len(self.train_set) + len(self.val_set) + len(self.test_set)}.")
 
     def __niiPng__(self, nii_path: str, output_path: str) -> None:
-        try: 
+        try:
             nii_volume = nib.load(nii_path)
             nii_data = nii_volume.get_fdata()
         except Exception as e:
+            print(f"Failed to load {nii_path}: {e}")
             return
-        
-        id_patient = (nii_path.split('/')[-1]).split("_")[0]
+
+        # Extract patient ID and augmentation type from the file name
+        file_name = os.path.basename(nii_path)
+        id_patient, augmentation_type = file_name.split('_')[0], file_name.split('_')[-2]
+
+        # Determine the output file name format based on the augmentation type
+        if augmentation_type in ["gamma", "brightness", "flip", "shift"]:
+            output_format = f"{id_patient}_slice-{{i}}_{augmentation_type}.png"
+        else:
+            output_format = f"{id_patient}_slice-{{i}}.png"
+
+        # Convert each slice to a .png file
         exclude = list(range(0, 121)) + list(range(200, 257))
         for i in range(nii_data.shape[2]):
             if i not in exclude:
-                # Temporal normalization
-                slice_normalized = cv2.normalize(nii_data[:, :, i], None, 0, 255, cv2.NORM_MINMAX)
+                slice_data = nii_data[:, :, i]
+                # Normalize the slice data to the range [0, 255]
+                slice_normalized = cv2.normalize(slice_data, None, 0, 255, cv2.NORM_MINMAX)
                 slice_uint8 = np.uint8(slice_normalized)
-                
-                cv2.imwrite(os.path.join(output_path, f'{id_patient}_slice-{i}.png'), slice_uint8)
-
-    def __contoursYOLO__(self, contours: List[List[int]], height: int, width: int, output_path: str):
-        with open(output_path, 'w') as f:
-            for contour in contours:
-                normalized = contour.squeeze().astype('float') / np.array([width, height])
-                str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
-                f.write(f"0 {str_contour}\n")
+                # Construct the output file name
+                output_file_name = output_format.format(i=i)
+                output_file_path = os.path.join(output_path, output_file_name)
+                # Save the slice as a .png file
+                cv2.imwrite(output_file_path, slice_uint8)
 
     def __roiContours__(self, nii_path: str, output_path: str):
         roi_path = os.path.join(self.dataset_path, self.roi_study)
         # Obtain the corresponding ROI niigz file
         id_patient = (nii_path.split('/')[-1]).split("_")[0]
         matching_files = glob.glob(os.path.join(roi_path, f"{id_patient}*.nii.gz"))
-    
+
         if not matching_files:
             print(f"No ROI files found for patient ID: {id_patient}")
             return # Skip this patient if no matching files are found
-        
+
         file = os.path.join(roi_path, matching_files[0])
         roi_niigz = nib.load(os.path.join(roi_path, file)).get_fdata()
         for i in range(roi_niigz.shape[2]):
@@ -140,10 +148,27 @@ class HoldOut:
             # Extract the contours that have at least 3 points : [[x1, y1], [x2, y2], [x3, y3], ...]
             contours = [contour for contour in contours if len(contour) >= 3]
             if contours:
+                # Determine the output file name format based on the augmentation type
+                file_name = os.path.basename(nii_path)
+                id_patient, augmentation_type = file_name.split('_')[0], file_name.split('_')[-2]
+                if augmentation_type in ["gamma", "brightness", "flip", "shift"]:
+                    output_format = f"{id_patient}_slice-{{i}}_{augmentation_type}.txt"
+                else:
+                    output_format = f"{id_patient}_slice-{{i}}.txt"
+                # Construct the output file name
+                output_file_name = output_format.format(i=i)
+                output_file_path = os.path.join(output_path, output_file_name)
                 self.__contoursYOLO__(contours=contours,
                                       height=slice.shape[0],
                                       width=slice.shape[1],
-                                      output_path=os.path.join(output_path, f"{id_patient}_slice-{i}.txt"))
+                                      output_path=output_file_path)
+
+    def __contoursYOLO__(self, contours: List[List[int]], height: int, width: int, output_path: str):
+        with open(output_path, 'w') as f:
+            for contour in contours:
+                normalized = contour.squeeze().astype('float') / np.array([width, height])
+                str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
+                f.write(f"0 {str_contour}\n")
 
     def __holdout__(self):
         # Create folder structure
@@ -159,6 +184,7 @@ class HoldOut:
         nifti_files = os.listdir(study_path)
         for niigz_file in tqdm(nifti_files, desc="Generating YOLO dataset"):
             nii_path = os.path.join(study_path, niigz_file)
+            
             if niigz_file in self.train_set:
                 image_output_path = os.path.join(base_path, "images", "train")
                 label_output_path = os.path.join(base_path, "labels", "train")

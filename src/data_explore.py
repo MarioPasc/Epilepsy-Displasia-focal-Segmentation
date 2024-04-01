@@ -19,14 +19,19 @@ def analyze_dataset(base_path, save_path):
         # Contar imágenes y etiquetas
         num_images = len([name for name in os.listdir(image_path) if name.endswith('.png')])
         num_labels = len([name for name in os.listdir(label_path) if name.endswith('.txt')])
+        
         total = num_images + num_labels
+        total_counts.append(total)
         
         image_counts.append(num_images)
         label_counts.append(num_labels)
-        total_counts.append(total)
-    
+
     x = np.arange(len(sets))  # Posiciones de las etiquetas en el eje x
-    width = 0.25  # Ancho de las barras
+    width = 0.25 # Ancho de las barras
+
+    if not total_counts or len(total_counts) != len(sets):
+        print("Error: total_counts is empty or does not match the number of sets.")
+        return
 
     fig, ax = plt.subplots(figsize=(10, 6))
     rects2 = ax.bar(x - width, image_counts, width, label='Images', color='skyblue')
