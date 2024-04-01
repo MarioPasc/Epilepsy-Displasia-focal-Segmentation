@@ -8,7 +8,7 @@ import glob
 from typing import Dict, List, Tuple
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+import re
 
 class DataAugmentation:
 
@@ -53,22 +53,22 @@ class DataAugmentation:
     # Apply the selected data augmentation method.
     # The augmentation method will create two .nii.gz file, one corresponding
     # to the study img and the other to the corresponding ROI
-    def apply_augmentations(self, augmentation_types: List[str]) -> None:
+    def apply_augmentations(self, augmentation_types: List[str], num_patients:int) -> None:
+        selected_patients = random.choices(list(self.valid_roi_slices.keys()), k=num_patients)
         with ThreadPoolExecutor() as executor:
             futures = []
 
-            # Generar tareas para el executor
-            for patient_id, slices in self.valid_roi_slices.items():
+            # Generate tasks for the executor for selected patients
+            for patient_id in selected_patients:
                 for augmentation_type in augmentation_types:
                     futures.append(executor.submit(self._apply_and_save_augmentation, patient_id, augmentation_type))
 
-            # Utilizar tqdm para mostrar la barra de progreso
+            # Use tqdm to show the progress bar
             tasks_progress = tqdm(as_completed(futures), total=len(futures), desc="Applying data augmentation")
 
             for future in tasks_progress:
-                future.result()  # Aquí puedes manejar los resultados o excepciones si es necesario
+                future.result() # Here you can handle results or exceptions if necessary
 
-            print(f"Threads created: {len(futures)}.")
 
     # Finds the patient's .nii.gz files, but excludes the ones that have the augmentation type applied in its name
     def _find_files(self, path: str, patient_id: str, exclude_keywords: List[str]) -> List[str]:
@@ -154,20 +154,34 @@ class DataAugmentation:
             self._save_transformed_volume(patient_id, transformed_roi_volume, roi_volume.affine, "roi",
                                           augmentation_type)
 
-    def _save_transformed_volume(self, patient_id: str, volume_data: np.ndarray, affine: np.ndarray, volume_type: str,
-                                 augmentation_type: str) -> None:
-        # Generar un nuevo volumen de imagen con la transformación aplicada y guardarlo como un nuevo archivo .nii.gz
-        new_volume = nib.Nifti1Image(volume_data, affine)
-        output_file_name = f"{patient_id}_{volume_type}_{augmentation_type}.nii.gz"
-        output_file_path = os.path.join(self.roi_path if volume_type == "roi" else self.study_path, output_file_name)
-        nib.save(new_volume, output_file_path)
+    def _save_transformed_volume(self, patient_id: str, volume_data: np.ndarray, affine: np.ndarray, volume_type: str, augmentation_type: str) -> None:
+        base_file_name = f"{patient_id}_{volume_type}_{augmentation_type}" # Define output_file_name before the try block
+        try:
+            # Generate a new volume of image with the transformation applied
+            new_volume = nib.Nifti1Image(volume_data, affine)
+            output_file_path = os.path.join(self.roi_path if volume_type == "roi" else self.study_path, base_file_name)
+            
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+            
+            # Check for existing augmented files for this patient and augmentation type
+            existing_files = glob.glob(f"{output_file_path}_*.nii.gz")
+            if existing_files:
+                # Extract the highest identifier from existing files
+                highest_id = max(int(re.search(r'_(\d+)\.nii\.gz', file).group(1)) for file in existing_files)
+                # Increment the identifier for the new file
+                new_id = highest_id + 1
+            else:
+                # If no existing files, start with 0
+                new_id = 0
+            
+            # Construct the new file name with the incremented identifier
+            output_file_name = f"{base_file_name}_{new_id}.nii.gz"
+            output_file_path = os.path.join(os.path.dirname(output_file_path), output_file_name)
+            
+            # Save the new volume
+            nib.save(new_volume, output_file_path)
+        except Exception as e:
+            print(f"Failed to save {output_file_name}: {e}")
 
 
-def main():
-    dataaug_instance = DataAugmentation(study_path="/home/mario/VSCode/Dataset/ds-epilepsy/T2FLAIR",
-                                        roi_path="/home/mario/VSCode/Dataset/ds-epilepsy/ROI")
-    dataaug_instance.apply_augmentations(["brightness"])
-
-
-if __name__ == "__main__":
-    main()

@@ -8,7 +8,6 @@ import nibabel as nib
 import cv2
 import numpy as np
 from tqdm import tqdm
-import math
 
 
 class DataLoader:
@@ -100,15 +99,20 @@ class HoldOut:
                   "and the sum of all sets is {len(self.train_set) + len(self.val_set) + len(self.test_set)}.")
 
     def __niiPng__(self, nii_path: str, output_path: str) -> None:
-        nii_volume = nib.load(nii_path)
-        nii_data = nii_volume.get_fdata()
+        try: 
+            nii_volume = nib.load(nii_path)
+            nii_data = nii_volume.get_fdata()
+        except Exception as e:
+            return
+        
         id_patient = (nii_path.split('/')[-1]).split("_")[0]
-        exclude = list(range(0, 121)) + list(range(220, 257))
+        exclude = list(range(0, 121)) + list(range(200, 257))
         for i in range(nii_data.shape[2]):
             if i not in exclude:
                 # Temporal normalization
                 slice_normalized = cv2.normalize(nii_data[:, :, i], None, 0, 255, cv2.NORM_MINMAX)
                 slice_uint8 = np.uint8(slice_normalized)
+                
                 cv2.imwrite(os.path.join(output_path, f'{id_patient}_slice-{i}.png'), slice_uint8)
 
     def __contoursYOLO__(self, contours: List[List[int]], height: int, width: int, output_path: str):
@@ -122,7 +126,13 @@ class HoldOut:
         roi_path = os.path.join(self.dataset_path, self.roi_study)
         # Obtain the corresponding ROI niigz file
         id_patient = (nii_path.split('/')[-1]).split("_")[0]
-        file = os.path.join(roi_path, glob.glob(os.path.join(roi_path, f"{id_patient}*.nii.gz"))[0])
+        matching_files = glob.glob(os.path.join(roi_path, f"{id_patient}*.nii.gz"))
+    
+        if not matching_files:
+            print(f"No ROI files found for patient ID: {id_patient}")
+            return # Skip this patient if no matching files are found
+        
+        file = os.path.join(roi_path, matching_files[0])
         roi_niigz = nib.load(os.path.join(roi_path, file)).get_fdata()
         for i in range(roi_niigz.shape[2]):
             slice = roi_niigz[:, :, i].astype(np.uint8)
@@ -165,11 +175,3 @@ class HoldOut:
             self.__roiContours__(nii_path=nii_path, output_path=label_output_path)
 
 
-def main():
-    dl_instance = DataLoader(dataset_path="/home/mario/VSCode/Dataset/epilepsy")
-    holdout_instance = HoldOut(dataset_path="/home/mario/VSCode/Dataset/ds-epilepsy",
-                               study_name="T2FLAIR", roi_study="ROI_T2", val_percent=.2, test_percent=.1)
-
-
-if __name__ == "__main__":
-    main()

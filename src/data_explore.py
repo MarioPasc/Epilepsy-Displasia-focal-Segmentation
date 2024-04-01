@@ -68,9 +68,9 @@ def analyze_dataset(base_path, save_path):
     plt.close()
 
 def main():
-    path = "/home/mario/VSCode/Dataset/T2FLAIR-ds-epilepsy"
+    path = "/home/mariopasc/Python/Datasets/T2FLAIR-ds-epilepsy"
     analyze_dataset(base_path=path,
-                    save_path="/home/mario/VSCode/Projects/Epilepsy-Displasia-focal-Segmentation/info-files/t2flair-study/images")
+                    save_path="/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/images")
 
 
 if __name__ == "__main__":
