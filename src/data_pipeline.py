@@ -2,7 +2,7 @@ import data_loader
 import data_augmentation
 import data_explore
 import time
-
+import tqdm
 
 def main():
     # Declaramos variables

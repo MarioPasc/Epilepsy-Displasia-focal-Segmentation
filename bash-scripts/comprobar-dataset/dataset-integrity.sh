@@ -16,7 +16,7 @@ for filepath in "${dir1}"/*${specific_word}*; do
     base_filename="${filename%.*}"
 
     # Indicar que se está procesando este archivo
-    #echo "Procesando: $filename"
+    echo "Procesando: $filename"
 
     # Recorrer cada extensión de archivo para buscar en dir2
     found=0 # Bandera para indicar si se encontró un archivo correspondiente

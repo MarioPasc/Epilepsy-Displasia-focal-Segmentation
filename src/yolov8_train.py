@@ -99,6 +99,10 @@ class SegmentationV8:
             plt.legend()
             # Guardar la gráfica en el archivo especificado
             save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runs/segment/Yolov8-Train/")
+            if os.path.exists(os.path.join(save_path, "metrics")):
+                pass
+            else:
+                os.makedirs(os.path.join(save_path, "metrics"))
             plt.savefig(f"{save_path}/{metric_name}_per_epoch.png")
             plt.close()
 

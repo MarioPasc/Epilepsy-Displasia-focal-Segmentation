@@ -4,6 +4,7 @@ import nibabel as nib
 import numpy as np
 import random
 import shutil
+import math
 
 
 def save_slices_with_roi(input_dir, output_txt):
@@ -33,8 +34,10 @@ def save_slices_with_roi(input_dir, output_txt):
             for i in range(data.shape[2]):
                 slice_data = data[:, :, i]
                 contours, _ = cv.findContours(slice_data, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-                if any(len(contour) >= 5 for contour in contours):
-                    files_with_roi.append(f"{patient_folder}-{i}.nii\n")
+                # Contours are given as tuples. If there are at least 5 <x> <y> points (3 <x, y> tuples), consider the contour
+                if len(contours) > 0:
+                    if math.ceil(len(contours[0])/2) >= 3:
+                        files_with_roi.append(f"{patient_folder}-{i}.nii\n")
 
     # Escribir la lista de archivos con ROI en el archivo de salida
     with open(output_txt, 'w') as file:
@@ -130,6 +133,17 @@ def rotation_augmentation(image_data, roi_folder, image_name):
     return rotated_image, rotated_roi
 
 
+def check_output_roi_contour(augmented_roi, augmented_data, roi_folder, augmented_image_name, input_folder, img):
+    contours_original, _ = cv.findContours(np.uint8(augmented_roi), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    if len(augmented_roi) > 0:  # There are contours in the ROI
+        if math.ceil(len(augmented_roi[0]) / 2) >= 3:  # There are at least 3 tuples <x, y> in the ROI
+            augmented_roi_path = os.path.join(roi_folder, augmented_image_name)
+            nib.save(nib.Nifti1Image(augmented_roi, img.affine), augmented_roi_path)
+            augmented_image_path = os.path.join(input_folder, augmented_image_name)
+            nib.save(nib.Nifti1Image(augmented_data, img.affine), augmented_image_path)
+            print(f"Translation augmentation applied to {augmented_image_name}")
+
+
 def apply_augmentation(num_images, input_folder, roi_folder, roi_txt_file, exclusion_file, augmentation_method):
     # Verificar si el directorio de entrada existe
     if not os.path.isdir(input_folder):
@@ -197,6 +211,9 @@ def apply_augmentation(num_images, input_folder, roi_folder, roi_txt_file, exclu
                                           original_image_name=image_name,
                                           augmentation_method=augmentation_method)
             print(f"Gamma augmentation applied to {augmented_image_name}")
+            augmented_image_path = os.path.join(input_folder, augmented_image_name)
+            nib.save(nib.Nifti1Image(augmented_data, img.affine), augmented_image_path)
+
         if augmentation_method == "BRIGHTNESS":
             # Aplicar el método de aumento de datos
             augmented_data = brightness_augmentation(data)
@@ -206,29 +223,32 @@ def apply_augmentation(num_images, input_folder, roi_folder, roi_txt_file, exclu
                                           original_image_name=image_name,
                                           augmentation_method=augmentation_method)
             print(f"Brightness augmentation applied to {augmented_image_name}")
+            augmented_image_path = os.path.join(input_folder, augmented_image_name)
+            nib.save(nib.Nifti1Image(augmented_data, img.affine), augmented_image_path)
 
         if augmentation_method == "TRANSLATION":
             # Aplicar el método de aumento de datos
             augmented_data, augmented_roi = translation_augmentation(image_data=data,
                                                                      roi_folder=roi_folder,
                                                                      image_name=image_name)
-
-            augmented_roi_path = os.path.join(roi_folder, augmented_image_name)
-            nib.save(nib.Nifti1Image(augmented_roi, img.affine), augmented_roi_path)
-
-            print(f"Translation augmentation applied to {augmented_image_name}")
+            check_output_roi_contour(augmented_roi=augmented_roi,
+                                     augmented_data=augmented_data,
+                                     roi_folder=roi_folder,
+                                     augmented_image_name=augmented_image_name,
+                                     input_folder=input_folder,
+                                     img=img)
 
         if augmentation_method == "ROTATION":
             # Aplicar el método de aumento de datos
             augmented_data, augmented_roi = rotation_augmentation(image_data=data,
                                                                   roi_folder=roi_folder,
                                                                   image_name=image_name)
+            check_output_roi_contour(augmented_roi=augmented_roi,
+                                     augmented_data=augmented_data,
+                                     roi_folder=roi_folder,
+                                     augmented_image_name=augmented_image_name,
+                                     input_folder=input_folder,
+                                     img=img)
 
-            augmented_roi_path = os.path.join(roi_folder, augmented_image_name)
-            nib.save(nib.Nifti1Image(augmented_roi, img.affine), augmented_roi_path)
 
-            print(f"Rotation augmentation applied to {augmented_image_name}")
 
-        # Guardar la imagen aumentada
-        augmented_image_path = os.path.join(input_folder, augmented_image_name)
-        nib.save(nib.Nifti1Image(augmented_data, img.affine), augmented_image_path)

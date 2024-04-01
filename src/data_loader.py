@@ -4,6 +4,8 @@ import cv2 as cv
 import nibabel as nib
 from sklearn.model_selection import train_test_split
 from concurrent.futures import ThreadPoolExecutor
+import math
+
 
 # Esta función convierte un estudio nii.gz a diversas imágenes .nii, asociando como nombre
 # de las imágenes idpaciente-slice.nii.
@@ -75,33 +77,7 @@ def study_to_nii(study_path, save_path, path_excluir):
                      [path_excluir] * len(patient_ids))
 
     print(f"Estudio {study_path} convertido a nii")
-# Esta función hace uso de la anterior para convertir un estudio completo a formato .nii
-"""
-def study_to_nii(study_path, save_path, path_excluir):
-    if not os.path.exists(study_path):
-        print("Input file does not exist")
-        return
 
-    # Por cada paciente dentro del estudio
-    for patient_id in os.listdir(study_path):
-        # Comprobar si el elemento es una carpeta
-        patient_folder = os.path.join(study_path, patient_id)
-        if not os.path.isdir(patient_folder):
-            print(f"Patient {patient_folder} not found")
-            continue
-
-        # Extraemos el nombre de su archivo nii.gz
-        niigz_files = [path for path in os.listdir(patient_folder) if path.endswith(".nii.gz")]
-        if not niigz_files:
-            print(f"No .nii.gz file found for patient {patient_id}")
-            continue
-
-        # Asumimos que solo hay un archivo .nii.gz por paciente
-        niigz_file = os.path.join(patient_folder, niigz_files[0])
-        convert_gz_nii(niigz_file=niigz_file, save_path=save_path, patient_id=patient_id, path_excluir=path_excluir)
-
-    print(f"Estudio {study_path} convertido a nii")
-"""
 
 # Esta función toma como entrada una carpeta con imágenes .nii y las guarda en la carpeta de destino
 # en el formato especificado.
@@ -238,17 +214,13 @@ def extract_roi_contours(input_txt):
 
 
 def contours_YOLO_format(contours, height, width, output_path):
-    if any(len(contour) >= 5 for contour in contours):
-        with open(output_path, 'w') as f:
-            for contour in contours:
-                if len(contour) >= 5:  # Comprobar cada contorno individualmente
+    if len(contours) > 0:  # There are contours in the ROI
+        if math.ceil(len(contours[0]) / 2) >= 3: # There are at least 3 tuples <x, y> in the ROI
+            with open(output_path, 'w') as f:
+                for contour in contours:
                     # Aplanar y normalizar las coordenadas del contorno
                     normalized = contour.squeeze().astype('float') / np.array([width, height])
                     # Convertir coordenadas normalizadas a strings con 6 dígitos decimales
                     str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
                     # Escribir en el archivo con la etiqueta 0 y las coordenadas normalizadas
                     f.write(f"0 {str_contour}\n")
-
-
-
-
