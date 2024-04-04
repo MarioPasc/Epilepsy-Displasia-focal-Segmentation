@@ -69,7 +69,6 @@ class DataAugmentation:
             for future in tasks_progress:
                 future.result() # Here you can handle results or exceptions if necessary
 
-
     # Finds the patient's .nii.gz files, but excludes the ones that have the augmentation type applied in its name
     def _find_files(self, path: str, patient_id: str, exclude_keywords: List[str]) -> List[str]:
         all_files = glob.glob(os.path.join(path, f'{patient_id}*.nii.gz'))

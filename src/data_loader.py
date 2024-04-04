@@ -8,7 +8,7 @@ import nibabel as nib
 import cv2
 import numpy as np
 from tqdm import tqdm
-
+from itertools import chain
 
 class DataLoader:
     def __init__(self, dataset_path: str) -> None:
@@ -71,7 +71,7 @@ class HoldOut:
         self.test_percent = test_percent
         self.dataset_path = dataset_path
         self.__holdoutNiigz__()
-        self.__holdout__()
+        
 
     def __holdoutNiigz__(self) -> None:
         self.train_set.clear()
@@ -105,32 +105,33 @@ class HoldOut:
         except Exception as e:
             print(f"Failed to load {nii_path}: {e}")
             return
-
+        
         # Extract patient ID and augmentation type from the file name
         file_name = os.path.basename(nii_path)
         id_patient, augmentation_type = file_name.split('_')[0], file_name.split('_')[-2]
-
         # Determine the output file name format based on the augmentation type
         if augmentation_type in ["gamma", "brightness", "flip", "shift"]:
             output_format = f"{id_patient}_slice-{{i}}_{augmentation_type}.png"
         else:
             output_format = f"{id_patient}_slice-{{i}}.png"
-
         # Convert each slice to a .png file
         exclude = list(range(0, 121)) + list(range(200, 257))
         for i in range(nii_data.shape[2]):
-            if i not in exclude:
-                slice_data = nii_data[:, :, i]
-                # Normalize the slice data to the range [0, 255]
-                slice_normalized = cv2.normalize(slice_data, None, 0, 255, cv2.NORM_MINMAX)
-                slice_uint8 = np.uint8(slice_normalized)
-                # Construct the output file name
-                output_file_name = output_format.format(i=i)
-                output_file_path = os.path.join(output_path, output_file_name)
-                # Save the slice as a .png file
-                cv2.imwrite(output_file_path, slice_uint8)
-
-    def __roiContours__(self, nii_path: str, output_path: str):
+            if output_format == f"{id_patient}_slice-{{i}}.png":
+                if i in exclude:
+                    continue
+            slice_data = nii_data[:, :, i]
+            # Normalize the slice data to the range [0, 255]
+            slice_normalized = cv2.normalize(slice_data, None, 0, 255, cv2.NORM_MINMAX)
+            slice_uint8 = np.uint8(slice_normalized)
+            # Construct the output file name
+            output_file_name = output_format.format(i=i)
+            output_file_path = os.path.join(output_path, output_file_name)
+            # Save the slice as a .png file
+            cv2.imwrite(output_file_path, slice_uint8)        
+            
+                
+    def __roiContours__(self, nii_path: str, output_path: str) -> None:
         roi_path = os.path.join(self.dataset_path, self.roi_study)
         # Obtain the corresponding ROI niigz file
         id_patient = (nii_path.split('/')[-1]).split("_")[0]
@@ -163,14 +164,28 @@ class HoldOut:
                                       width=slice.shape[1],
                                       output_path=output_file_path)
 
-    def __contoursYOLO__(self, contours: List[List[int]], height: int, width: int, output_path: str):
+    def __contoursYOLO__(self, contours: List[List[int]], height: int, width: int, output_path: str) -> None:
         with open(output_path, 'w') as f:
             for contour in contours:
                 normalized = contour.squeeze().astype('float') / np.array([width, height])
                 str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
                 f.write(f"0 {str_contour}\n")
 
-    def __holdout__(self):
+    def organizeAugmentation(self) -> None:  
+        study_path = os.path.join(self.dataset_path, self.study_name)
+        patients_train = [patient.split("_")[0] + "*" for patient in self.train_set]
+        train_all = list(chain(*[glob.glob(os.path.join(study_path, patientAug)) for patientAug in patients_train]))
+        self.train_set = [os.path.basename(item) for item in train_all]
+
+        patients_val = [patient.split("_")[0] + "*" for patient in self.val_set]
+        val_all = list(chain(*[glob.glob(os.path.join(study_path, patientAug)) for patientAug in patients_val]))
+        self.val_set = [os.path.basename(item) for item in val_all]
+
+        patients_test = [patient.split("_")[0] + "*" for patient in self.test_set]
+        test_all = list(chain(*[glob.glob(os.path.join(study_path, patientAug)) for patientAug in patients_test]))
+        self.test_set = [item.split("/")[-1] for item in test_all]
+
+    def holdout(self) -> None:
         # Create folder structure
         base_path = os.path.join(self.dataset_path, "..", f"{self.study_name}-ds-epilepsy")
         if (not os.path.exists(base_path)):
