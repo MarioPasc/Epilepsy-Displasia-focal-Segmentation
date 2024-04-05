@@ -42,7 +42,9 @@ class DataLoader:
         if (not os.path.exists(base_path)):
             os.makedirs(base_path, exist_ok=True)
             for folder in ["T2FLAIR", "T1WEIGHTED", "ROI_T2", "ROI_T1"]:
-                os.makedirs(os.path.join(base_path, folder), exist_ok=True)
+                study_folder = os.path.join(base_path, folder)
+                os.makedirs(study_folder, exist_ok=True)
+                os.makedirs(os.path.join(study_folder, "TEST"), exist_ok=True)
 
         for patient in self.patients_roi:
             anat_path = os.path.join(self.dataset_path, patient, 'anat')
@@ -71,6 +73,7 @@ class HoldOut:
         self.test_percent = test_percent
         self.dataset_path = dataset_path
         self.__holdoutNiigz__()
+        self.__relocateTestFiles__()
         
 
     def __holdoutNiigz__(self) -> None:
@@ -97,6 +100,13 @@ class HoldOut:
         else:
             print(f"Hold-out error. The total file amount is {len(niigz_files)}" +
                   "and the sum of all sets is {len(self.train_set) + len(self.val_set) + len(self.test_set)}.")
+
+    def __relocateTestFiles__(self) -> None:
+        study_path = os.path.join(self.dataset_path, self.study_name)
+        for file in os.listdir(study_path):
+            if file in self.test_set:
+                shutil.move(src=os.path.join(study_path, file),
+                            dst=os.path.join(study_path, "TEST"))
 
     def __niiPng__(self, nii_path: str, output_path: str) -> None:
         try:
@@ -181,9 +191,7 @@ class HoldOut:
         val_all = list(chain(*[glob.glob(os.path.join(study_path, patientAug)) for patientAug in patients_val]))
         self.val_set = [os.path.basename(item) for item in val_all]
 
-        patients_test = [patient.split("_")[0] + "*" for patient in self.test_set]
-        test_all = list(chain(*[glob.glob(os.path.join(study_path, patientAug)) for patientAug in patients_test]))
-        self.test_set = [item.split("/")[-1] for item in test_all]
+        
 
     def holdout(self) -> None:
         # Create folder structure
@@ -206,12 +214,16 @@ class HoldOut:
             elif niigz_file in self.val_set:
                 image_output_path = os.path.join(base_path, "images", "val")
                 label_output_path = os.path.join(base_path, "labels", "val")
-            elif niigz_file in self.test_set:
-                image_output_path = os.path.join(base_path, "images", "test")
-                label_output_path = os.path.join(base_path, "labels", "test")
             else:
                 continue
 
+            self.__niiPng__(nii_path=nii_path, output_path=image_output_path)
+            self.__roiContours__(nii_path=nii_path, output_path=label_output_path)
+
+        for test_image in os.listdir(os.path.join(study_path, "TEST")):
+            image_output_path = os.path.join(base_path, "images", "test")
+            label_output_path = os.path.join(base_path, "labels", "test")
+            nii_path = os.path.join(study_path, "TEST", test_image)
             self.__niiPng__(nii_path=nii_path, output_path=image_output_path)
             self.__roiContours__(nii_path=nii_path, output_path=label_output_path)
 
