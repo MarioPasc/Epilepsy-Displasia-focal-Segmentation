@@ -7,8 +7,8 @@ def main():
     dataaug_instance = data_augmentation.DataAugmentation(study_path="/home/mariopasc/Python/Datasets/ds-epilepsy/T2FLAIR",
                                         roi_path="/home/mariopasc/Python/Datasets/ds-epilepsy/ROI_T2")
     holdout_instance = data_loader.HoldOut(dataset_path="/home/mariopasc/Python/Datasets/ds-epilepsy",
-                               study_name="T2FLAIR", roi_study="ROI_T2", val_percent=.25, test_percent=.1)
-    #dataaug_instance.apply_augmentations(augmentation_types=["brightness", "gamma"], num_patients=75)
+                               study_name="T2FLAIR", roi_study="ROI_T2", val_percent=.2, test_percent=.2)
+    dataaug_instance.apply_augmentations(augmentation_types=["brightness", "gamma"], num_patients=75)
     holdout_instance.organizeAugmentation()
     holdout_instance.holdout()
     results_path = "/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/images"

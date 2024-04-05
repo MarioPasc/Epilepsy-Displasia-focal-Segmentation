@@ -85,9 +85,9 @@ class HoldOut:
         niigz_files = [file for file in os.listdir(folder_path) if file.endswith('.nii.gz')]
         # Split
         val_test_size = self.val_percent + self.test_percent
-        train_files, val_test_files = train_test_split(niigz_files, test_size=val_test_size, random_state=42)
+        train_files, val_test_files = train_test_split(niigz_files, test_size=val_test_size, random_state=3)
         val_files, test_files = train_test_split(val_test_files, test_size=self.test_percent / val_test_size,
-                                                 random_state=42)
+                                                 random_state=3)
 
         self.train_set.extend(train_files)
         self.val_set.extend(val_files)
@@ -121,14 +121,18 @@ class HoldOut:
         id_patient, augmentation_type = file_name.split('_')[0], file_name.split('_')[-2]
         # Determine the output file name format based on the augmentation type
         if augmentation_type in ["gamma", "brightness", "flip", "shift"]:
-            output_format = f"{id_patient}_slice-{{i}}_{augmentation_type}.png"
+            id_augmentation = file_name.split('.')[0].split('_')[-1]
+            output_format = f"{id_patient}_slice-{{i}}_{augmentation_type}_{id_augmentation}.png"
         else:
             output_format = f"{id_patient}_slice-{{i}}.png"
+
+
         # Convert each slice to a .png file
         exclude = list(range(0, 121)) + list(range(200, 257))
         for i in range(nii_data.shape[2]):
             if output_format == f"{id_patient}_slice-{{i}}.png":
-                if i in exclude:
+                # Exclude only images that have more than a hundred images per patient
+                if i in exclude and nii_data.shape[2] > 100:
                     continue
             slice_data = nii_data[:, :, i]
             # Normalize the slice data to the range [0, 255]
@@ -143,29 +147,43 @@ class HoldOut:
                 
     def __roiContours__(self, nii_path: str, output_path: str) -> None:
         roi_path = os.path.join(self.dataset_path, self.roi_study)
-        # Obtain the corresponding ROI niigz file
-        id_patient = (nii_path.split('/')[-1]).split("_")[0]
-        matching_files = glob.glob(os.path.join(roi_path, f"{id_patient}*.nii.gz"))
+        # Determine the output file name format based on the augmentation type
+        # Extract patient ID and augmentation type from the file name
+        file_name = os.path.basename(nii_path)
+        id_patient, augmentation_type = file_name.split('_')[0], file_name.split('_')[-2]
+        # Determine the output file name format based on the augmentation type
+        if augmentation_type in ["gamma", "brightness", "flip", "shift"]:
+            id_augmentation = file_name.split('.')[0].split('_')[-1]
+            output_format = f"{id_patient}_slice-{{i}}_{augmentation_type}_{id_augmentation}.txt"
+            matching_files = glob.glob(os.path.join(roi_path, f"{id_patient}*{augmentation_type}_{id_augmentation}.nii.gz"))
+        else:
+            output_format = f"{id_patient}_slice-{{i}}.txt"    
+            matching_files = glob.glob(os.path.join(roi_path, f"{id_patient}*.nii.gz"))
 
+        
         if not matching_files:
             print(f"No ROI files found for patient ID: {id_patient}")
             return # Skip this patient if no matching files are found
 
-        file = os.path.join(roi_path, matching_files[0])
+        file = os.path.join(roi_path, matching_files[0])    
+
+        if id_patient == "sub-00001": print(f"Image: {nii_path} \nMatching: {file}")  
+        
         roi_niigz = nib.load(os.path.join(roi_path, file)).get_fdata()
+        exclude = list(range(0, 121)) + list(range(200, 257))
         for i in range(roi_niigz.shape[2]):
+            if output_format == f"{id_patient}_slice-{{i}}.txt":
+                # Exclude only images that have more than a hundred images per patient
+                if i in exclude and roi_niigz.shape[2] > 100:
+                    continue
             slice = roi_niigz[:, :, i].astype(np.uint8)
             contours, _ = cv2.findContours(slice, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             # Extract the contours that have at least 3 points : [[x1, y1], [x2, y2], [x3, y3], ...]
             contours = [contour for contour in contours if len(contour) >= 3]
             if contours:
-                # Determine the output file name format based on the augmentation type
-                file_name = os.path.basename(nii_path)
-                id_patient, augmentation_type = file_name.split('_')[0], file_name.split('_')[-2]
-                if augmentation_type in ["gamma", "brightness", "flip", "shift"]:
-                    output_format = f"{id_patient}_slice-{{i}}_{augmentation_type}.txt"
-                else:
-                    output_format = f"{id_patient}_slice-{{i}}.txt"
+                
+
+                  
                 # Construct the output file name
                 output_file_name = output_format.format(i=i)
                 output_file_path = os.path.join(output_path, output_file_name)

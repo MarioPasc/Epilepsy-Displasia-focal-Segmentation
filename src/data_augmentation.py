@@ -115,7 +115,7 @@ class DataAugmentation:
         roi_file_path = roi_files[0] if roi_files else None
 
         if not study_file_path or not roi_file_path:
-            print(f"No se encontraron archivos .nii.gz para el paciente {patient_id}.")
+            print(f"Patient {patient_id} is test file or missing.")
             return
 
         # El resto del código sigue igual...
