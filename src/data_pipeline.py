@@ -11,6 +11,7 @@ def main():
     dataaug_instance.apply_augmentations(augmentation_types=["brightness", "gamma"], num_patients=75)
     holdout_instance.organizeAugmentation()
     holdout_instance.holdout()
+    print(dataaug_instance.valid_roi_slices)
     results_path = "/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/images"
     data_explore.analyze_dataset("/home/mariopasc/Python/Datasets/T2FLAIR-ds-epilepsy", results_path)
 

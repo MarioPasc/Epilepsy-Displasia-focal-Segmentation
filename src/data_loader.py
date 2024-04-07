@@ -1,7 +1,7 @@
 import os
 import glob
 from sklearn.model_selection import train_test_split
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Optional
 import shutil
 import nibabel as nib
@@ -24,18 +24,17 @@ class DataLoader:
             return os.path.basename(os.path.dirname(anat_path))
 
     def __find_patients_with_roi__(self) -> List[str]:
-        with ThreadPoolExecutor() as executor:
-            futures = []
-
-            for patient_folder in os.listdir(self.dataset_path):
-                anat_path = os.path.join(self.dataset_path, patient_folder, 'anat')
-                if os.path.isdir(anat_path):
-                    futures.append(executor.submit(DataLoader.__check_patient_for_roi__, anat_path))
+        patients_roi = []
+        with ProcessPoolExecutor() as executor:
+            futures = {executor.submit(self.__check_patient_for_roi__, os.path.join(self.dataset_path, patient_folder, 'anat'))
+                       for patient_folder in os.listdir(self.dataset_path)
+                       if os.path.isdir(os.path.join(self.dataset_path, patient_folder, 'anat'))}
 
             for future in as_completed(futures):
                 result = future.result()
                 if result:
-                    self.patients_roi.append(result)
+                    patients_roi.append(result)
+        self.patients_roi = patients_roi
 
     def __organize_patients_data__(self) -> None:
         base_path = os.path.join(self.dataset_path, "..", "ds-epilepsy")
@@ -126,20 +125,21 @@ class HoldOut:
         else:
             output_format = f"{id_patient}_slice-{{i}}.png"
 
-
         # Convert each slice to a .png file
         exclude = list(range(0, 121)) + list(range(200, 257))
         for i in range(nii_data.shape[2]):
             if output_format == f"{id_patient}_slice-{{i}}.png":
                 # Exclude only images that have more than a hundred images per patient
                 if i in exclude and nii_data.shape[2] > 100:
-                    continue
+                    continue    
             slice_data = nii_data[:, :, i]
             # Normalize the slice data to the range [0, 255]
             slice_normalized = cv2.normalize(slice_data, None, 0, 255, cv2.NORM_MINMAX)
             slice_uint8 = np.uint8(slice_normalized)
             # Construct the output file name
             output_file_name = output_format.format(i=i)
+            if id_patient == "sub-00001": print(f"Image output: {output_file_name}")
+
             output_file_path = os.path.join(output_path, output_file_name)
             # Save the slice as a .png file
             cv2.imwrite(output_file_path, slice_uint8)        
@@ -166,9 +166,6 @@ class HoldOut:
             return # Skip this patient if no matching files are found
 
         file = os.path.join(roi_path, matching_files[0])    
-
-        if id_patient == "sub-00001": print(f"Image: {nii_path} \nMatching: {file}")  
-        
         roi_niigz = nib.load(os.path.join(roi_path, file)).get_fdata()
         exclude = list(range(0, 121)) + list(range(200, 257))
         for i in range(roi_niigz.shape[2]):
@@ -176,16 +173,16 @@ class HoldOut:
                 # Exclude only images that have more than a hundred images per patient
                 if i in exclude and roi_niigz.shape[2] > 100:
                     continue
+
             slice = roi_niigz[:, :, i].astype(np.uint8)
             contours, _ = cv2.findContours(slice, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             # Extract the contours that have at least 3 points : [[x1, y1], [x2, y2], [x3, y3], ...]
             contours = [contour for contour in contours if len(contour) >= 3]
             if contours:
-                
-
-                  
                 # Construct the output file name
                 output_file_name = output_format.format(i=i)
+                if id_patient == "sub-00001": print(f"Image output: {output_file_name}")
+
                 output_file_path = os.path.join(output_path, output_file_name)
                 self.__contoursYOLO__(contours=contours,
                                       height=slice.shape[0],
