@@ -66,9 +66,11 @@ class DataAugmentation:
     # The augmentation method will create two .nii.gz file, one corresponding
     # to the study img and the other to the corresponding ROI
     def apply_augmentations(self, augmentation_types: List[str], num_patients:int) -> None:
+        # Avoid using test patients as input augmentation data
         test_patients = np.array([x.split("_")[0] for x in self.test_set])
         train_val_patients = np.setdiff1d(np.array(list(self.valid_roi_slices.keys())), test_patients)
         selected_patients = random.choices(train_val_patients, k=num_patients)
+
         with ProcessPoolExecutor() as executor:
             futures = []
 
@@ -81,7 +83,7 @@ class DataAugmentation:
             tasks_progress = tqdm(as_completed(futures), total=len(futures), desc="Applying data augmentation")
 
             for future in tasks_progress:
-                future.result() # Here you can handle results or exceptions if necessary
+                future.result() 
 
     # Finds the patient's .nii.gz files, but excludes the ones that have the augmentation type applied in its name
     def _find_files(self, path: str, patient_id: str, exclude_keywords: List[str]) -> List[str]:

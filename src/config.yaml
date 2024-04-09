@@ -1,4 +1,4 @@
-path: /home/mariopasc/Python/old-dataset/T2FLAIR-ds-epilepsy-BRGM
+path: /home/mariopasc/Python/Datasets/T2FLAIR_yolov8_dataset
 train: images/train
 val: images/val
 test: images/test

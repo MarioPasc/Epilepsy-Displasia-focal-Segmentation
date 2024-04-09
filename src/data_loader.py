@@ -72,25 +72,7 @@ class HoldOut:
         self.val_percent = val_percent
         self.test_percent = test_percent
         self.__holdoutNiigz__()
-
-    def organizeAugmentation(self) -> None:  
-        study_path = os.path.join(self.dataset_path, self.study_name)
-        patients_train = [patient.split("_")[0] + "*" for patient in self.train_set]
-        train_all = list(chain(*[glob.glob(os.path.join(study_path, patientAug)) for patientAug in patients_train]))
-        self.train_set = [os.path.basename(item) for item in train_all]
-
-        patients_val = [patient.split("_")[0] + "*" for patient in self.val_set]
-        val_all = list(chain(*[glob.glob(os.path.join(study_path, patientAug)) for patientAug in patients_val]))
-        self.val_set = [os.path.basename(item) for item in val_all]
-
-
-    def __contoursYOLO__(self, contours: List[List[int]], height: int, width: int, output_path: str) -> None:
-        with open(output_path, 'w') as f:
-            for contour in contours:
-                normalized = contour.squeeze().astype('float') / np.array([width, height])
-                str_contour = ' '.join([f"{coord:.6f}" for coord in normalized.flatten()])
-                f.write(f"0 {str_contour}\n")    
-
+    
     def __holdoutNiigz__(self) -> None:
         self.train_set.clear()
         self.val_set.clear()

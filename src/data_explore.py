@@ -92,12 +92,3 @@ def analyze_dataset(base_path, save_path):
     plt.close()
 
 
-
-
-def main():
-    results_path = "/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/images"
-    analyze_dataset("/home/mariopasc/Python/Datasets/T2FLAIR-ds-epilepsy", 
-                    results_path)
-
-if __name__ == "__main__":
-    main()
