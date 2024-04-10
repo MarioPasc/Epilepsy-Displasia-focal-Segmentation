@@ -46,14 +46,14 @@ class SegmentationV8:
         with open(self.csv_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(['epoch', 'file',
-                             'metrics/precision(B)', 'metrics/recall(B)', 'metrics/mAP50(B)', 'metrics/mAP50-95(B)',
-                             'metrics/precision(M)', 'metrics/recall(M)', 'metrics/mAP50(M)', 'metrics/mAP50-95(M)',
+                             'precision(B)', 'recall(B)', 'mAP50(B)', 'mAP50-95(B)',
+                             'precision(M)', 'recall(M)', 'mAP50(M)', 'mAP50-95(M)',
                              'TP', 'TN', 'FP', 'FN'])
 
             for weight_file in weights_files:
                 # Identificar si el archivo es 'best.pt' o 'last.pt'
                 if 'best.pt' in weight_file:
-                    epoch = 0
+                    epoch = 101
                     file_name = 'best'
                 elif 'last.pt' in weight_file:
                     epoch = 100  # Usamos 'N' como marcador para 'last.pt'
@@ -88,21 +88,49 @@ class SegmentationV8:
                                  tp, TN, FP, FN])
 
     def val_metrics(self):
-        metrics_df = pd.read_csv(self.csv_path)
+        """
+        This function plots the training metrics versus validation metrics for each epoch
+        using data from 'results.csv' and 'results_val.csv'.
+        """
+        # Load training and validation metrics
+        train_metrics_df = pd.read_csv(os.path.join(self.base_dir, "runs/segment/Yolov8-Train/results.csv"))
+        train_metrics_df.columns = train_metrics_df.columns.str.strip()  # Strip leading/trailing spaces from column names        train_metrics_df.columns = train_metrics_df.columns.str.strip()  # Strip leading/trailing spaces from column names
+        val_metrics_df = pd.read_csv(self.csv_path)
 
-        def plot_metric(df, metric_name):
+        def plot_metric(train_df, val_df, metric_name):
+            """
+            Plots a specified metric for both training and validation datasets over epochs.
+            """
+            # Find common epochs to ensure alignment in plots
+            common_epochs = pd.Series(list(set(train_df['epoch']) & set(val_df['epoch'])))
+            train_df_filtered = train_df[train_df['epoch'].isin(common_epochs)]
+            val_df_filtered = val_df[val_df['epoch'].isin(common_epochs)]
+
             plt.figure(figsize=(10, 5))
-            plt.plot(df['epoch'], df[metric_name], label=metric_name)
+            plt.plot(train_df_filtered['epoch'], train_df_filtered[metric_name], label=f'Training {metric_name}')
+            plt.plot(val_df_filtered['epoch'], val_df_filtered[metric_name], label=f'Validation {metric_name}')
             plt.xlabel('Epoch')
             plt.ylabel(metric_name)
-            plt.title(f'Curve of {metric_name} per Epoch')
+            plt.title(f'Training vs Validation {metric_name} per Epoch')
             plt.legend()
-            # Guardar la gráfica en el archivo especificado
-            save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runs/segment/Yolov8-Train/")
-            plt.savefig(f"{save_path}/{metric_name}_per_epoch.png")
+
+            # Ensure the save path exists
+            save_path = os.path.join(self.base_dir, "runs/segment/Yolov8-Train/metrics")
+            os.makedirs(save_path, exist_ok=True)
+            plt.savefig(f"{save_path}/{metric_name.replace('metrics/', '')}_train_vs_val_per_epoch.png")
             plt.close()
 
+        # Define the metrics you want to plot
+        metric_names = ['metrics/precision(M)', 'metrics/recall(M)', 'metrics/mAP50(M)', 'metrics/mAP50-95(M)',
+                        'metrics/precision(B)', 'metrics/recall(B)', 'metrics/mAP50(B)', 'metrics/mAP50-95(B)']
+
+        for metric_name in metric_names:
+            plot_metric(train_metrics_df, val_metrics_df, metric_name)
+
         def plot_confusion_matrix_save(df):
+            """
+            Plots and saves the average confusion matrix from validation dataset.
+            """
             mean_TP = round(df['TP'].mean(), 1)
             mean_TN = round(df['TN'].mean(), 1)
             mean_FP = round(df['FP'].mean(), 1)
@@ -119,21 +147,14 @@ class SegmentationV8:
             plt.title('Average Confusion Matrix', size=15)
             plt.ylabel('Actual label', size=12)
             plt.xlabel('Predicted label', size=12)
-            # Guardar la gráfica en el archivo especificado
-            save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runs/segment/Yolov8-Train/")
+
+            # Save the plot
+            save_path = os.path.join(self.base_dir, "runs/segment/Yolov8-Train/")
+            os.makedirs(save_path, exist_ok=True)  # Ensure the directory exists
             plt.savefig(f"{save_path}/average_confusion_matrix.png")
             plt.close()
 
-        plot_metric(metrics_df, 'metrics/precision(M)')
-        plot_metric(metrics_df, 'metrics/recall(M)')
-        plot_metric(metrics_df, 'metrics/mAP50(M)')
-        plot_metric(metrics_df, 'metrics/mAP50-95(M)')
-        plot_metric(metrics_df, 'metrics/precision(B)')
-        plot_metric(metrics_df, 'metrics/recall(B)')
-        plot_metric(metrics_df, 'metrics/mAP50(B)')
-        plot_metric(metrics_df, 'metrics/mAP50-95(B)')
-
-        plot_confusion_matrix_save(metrics_df)
+        plot_confusion_matrix_save(val_metrics_df)
 
 
 def main(path_model, yaml_path):

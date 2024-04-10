@@ -2,7 +2,14 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-
+import nibabel as nib
+from typing import List, Tuple, Dict
+import cv2
+import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import glob
+import matplotlib
+matplotlib.use('Agg')
 
 def analyze_dataset(base_path, save_path):
     # Subdirectorios a analizar
@@ -10,28 +17,45 @@ def analyze_dataset(base_path, save_path):
     image_counts = []
     label_counts = []
     total_counts = []
+    def check_missing_labels(images_path, labels_path, set_type):
+        total_images = os.listdir(images_path)
+        total_labels = os.listdir(labels_path)
 
+        # Crear conjuntos de los nombres de archivos sin extensiones para comparar
+        image_set = {os.path.splitext(image)[0] for image in total_images}
+        label_set = {os.path.splitext(label)[0] for label in total_labels}
+
+        # Crear una lista de imágenes que no tienen etiqueta correspondiente
+        images_without_label = [image for image in image_set if image not in label_set]
+        return (len(images_without_label))
     # Recorrer cada conjunto y contar archivos
     for set_name in sets:
         image_path = os.path.join(base_path, "images", set_name)
         label_path = os.path.join(base_path, "labels", set_name)
         
         # Contar imágenes y etiquetas
-        num_images = len([name for name in os.listdir(image_path) if name.endswith('.png')])
-        num_labels = len([name for name in os.listdir(label_path) if name.endswith('.txt')])
-        total = num_images + num_labels
-        
+        total = len([name for name in os.listdir(image_path) if name.endswith('.png')])
+        num_images = check_missing_labels(images_path=image_path,
+                                          labels_path=label_path,
+                                           set_type=set_name)
+
+        num_labels = total - num_images
+
+        total_counts.append(total)
         image_counts.append(num_images)
         label_counts.append(num_labels)
-        total_counts.append(total)
-    
+
     x = np.arange(len(sets))  # Posiciones de las etiquetas en el eje x
-    width = 0.25  # Ancho de las barras
+    width = 0.25 # Ancho de las barras
+
+    if not total_counts or len(total_counts) != len(sets):
+        print("Error: total_counts is empty or does not match the number of sets.")
+        return
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    rects2 = ax.bar(x - width, image_counts, width, label='Images', color='skyblue')
-    rects3 = ax.bar(x, label_counts, width, label='Labels', color='orange')
-    rects1 = ax.bar(x + width, total_counts, width, label='Images + Labels', color='lightgreen')
+    rects2 = ax.bar(x - width, image_counts, width, label='FCD=0', color='skyblue')
+    rects3 = ax.bar(x, label_counts, width, label='FCD=1', color='orange')
+    rects1 = ax.bar(x + width, total_counts, width, label='Total Images', color='lightgreen')
 
     # Etiquetas y títulos
     ax.set_ylabel('Count')
@@ -67,11 +91,13 @@ def analyze_dataset(base_path, save_path):
     # Cerrar la figura para liberar memoria
     plt.close()
 
-def main():
-    path = "/home/mario/VSCode/Dataset/T2FLAIR-ds-epilepsy"
-    analyze_dataset(base_path=path,
-                    save_path="/home/mario/VSCode/Projects/Epilepsy-Displasia-focal-Segmentation/info-files/t2flair-study/images")
 
+
+
+def main():
+    results_path = "/home/mariopasc/Python/Projects/BSC_final/epilepsy-displasia-focal-segmentation/images"
+    analyze_dataset("/home/mariopasc/Python/Datasets/T2FLAIR-ds-epilepsy", 
+                    results_path)
 
 if __name__ == "__main__":
     main()

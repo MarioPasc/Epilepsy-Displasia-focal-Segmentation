@@ -8,17 +8,17 @@ import glob
 from typing import Dict, List, Tuple
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+import re
 
 class DataAugmentation:
-    
+
     def __init__(self, study_path: str, roi_path: str) -> None:
         self.study_path = study_path
         self.roi_path = roi_path
         self.valid_roi_slices: Dict[str, List[int]] = {}
         self.__find_valid_roi_slices__()
-    
-    # Find valid slices for each patient. We consider a slice as valir 
+
+    # Find valid slices for each patient. We consider a slice as valir
     # if its corresponding roi's contour has at least 5 points
     def __process_roi_file__(self, roi_file: str) -> Tuple[str, List[int]]:
         valid_slices = []
@@ -30,13 +30,13 @@ class DataAugmentation:
             slice_data = roi_data[:, :, i]
             slice_data = np.array(slice_data, dtype=np.uint8)
             contours, _ = cv2.findContours(slice_data, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if contours and math.ceil(len(contours[0])/2) > 3:
+            if contours and math.ceil(len(contours[0]) / 2) > 3:
                 valid_slices.append(i)
-        
-        patient_id = roi_file.split('_')[0]  
+
+        patient_id = roi_file.split('_')[0]
         return (patient_id, valid_slices)
 
-    # Apply the function process_roi_file concurrently 
+    # Apply the function process_roi_file concurrently
     def __find_valid_roi_slices__(self) -> None:
         with ThreadPoolExecutor() as executor:
             futures = []
@@ -49,26 +49,25 @@ class DataAugmentation:
                 patient_id, valid_slices = future.result()
                 if valid_slices:
                     self.valid_roi_slices[patient_id] = valid_slices
-    
-    # Apply the selected data augmentation method. 
-    # The augmentation method will create two .nii.gz file, one corresponding 
+
+    # Apply the selected data augmentation method.
+    # The augmentation method will create two .nii.gz file, one corresponding
     # to the study img and the other to the corresponding ROI
-    def apply_augmentations(self, augmentation_types: List[str]) -> None:
+    def apply_augmentations(self, augmentation_types: List[str], num_patients:int) -> None:
+        selected_patients = random.choices(list(self.valid_roi_slices.keys()), k=num_patients)
         with ThreadPoolExecutor() as executor:
             futures = []
 
-            # Generar tareas para el executor
-            for patient_id, slices in self.valid_roi_slices.items():
+            # Generate tasks for the executor for selected patients
+            for patient_id in selected_patients:
                 for augmentation_type in augmentation_types:
                     futures.append(executor.submit(self._apply_and_save_augmentation, patient_id, augmentation_type))
 
-            # Utilizar tqdm para mostrar la barra de progreso
+            # Use tqdm to show the progress bar
             tasks_progress = tqdm(as_completed(futures), total=len(futures), desc="Applying data augmentation")
 
             for future in tasks_progress:
-                future.result()  # Aquí puedes manejar los resultados o excepciones si es necesario
-
-            print(f"Threads created: {len(futures)}.")
+                future.result() # Here you can handle results or exceptions if necessary
 
     # Finds the patient's .nii.gz files, but excludes the ones that have the augmentation type applied in its name
     def _find_files(self, path: str, patient_id: str, exclude_keywords: List[str]) -> List[str]:
@@ -90,8 +89,10 @@ class DataAugmentation:
         tx = random.randint(-5, 5)
         ty = random.randint(-5, 5)
         M = np.float32([[1, 0, tx], [0, 1, ty]])
-        shifted_study_slice = cv2.warpAffine(study_slice, M, (study_slice.shape[1], study_slice.shape[0]), borderMode=cv2.BORDER_REFLECT)
-        shifted_roi_slice = cv2.warpAffine(roi_slice, M, (roi_slice.shape[1], roi_slice.shape[0]), borderMode=cv2.BORDER_REFLECT)
+        shifted_study_slice = cv2.warpAffine(study_slice, M, (study_slice.shape[1], study_slice.shape[0]),
+                                             borderMode=cv2.BORDER_REFLECT)
+        shifted_roi_slice = cv2.warpAffine(roi_slice, M, (roi_slice.shape[1], roi_slice.shape[0]),
+                                           borderMode=cv2.BORDER_REFLECT)
         return shifted_study_slice, shifted_roi_slice
 
     def _flip(self, study_slice: np.ndarray, roi_slice: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -104,16 +105,17 @@ class DataAugmentation:
         # Search for niigz files that include the patient's id in its corresponding name
         # But doesn't include the augmentation method in its name, since we dont want to
         # apply the agumentation technique two times to the same image.
-        study_files = self._find_files(self.study_path, patient_id, exclude_keywords=["flip", "shift", "gamma", "brightness"])
-        roi_files = self._find_files(self.roi_path, patient_id, exclude_keywords=["flip", "shift", "gamma", "brightness"])
+        study_files = self._find_files(self.study_path, patient_id,
+                                       exclude_keywords=["flip", "shift", "gamma", "brightness"])
+        roi_files = self._find_files(self.roi_path, patient_id,
+                                     exclude_keywords=["flip", "shift", "gamma", "brightness"])
 
-        
         # Asumir que el primer archivo encontrado es el correcto si hay más de uno
         study_file_path = study_files[0] if study_files else None
         roi_file_path = roi_files[0] if roi_files else None
 
         if not study_file_path or not roi_file_path:
-            print(f"No se encontraron archivos .nii.gz para el paciente {patient_id}.")
+            print(f"Patient {patient_id} is test file or missing.")
             return
 
         # El resto del código sigue igual...
@@ -127,38 +129,58 @@ class DataAugmentation:
 
         for slice_index in self.valid_roi_slices.get(patient_id, []):
             if augmentation_type == "flip":
-                transformed_study_slice, transformed_roi_slice = self._flip(study_data[:, :, slice_index], roi_data[:, :, slice_index])
+                transformed_study_slice, transformed_roi_slice = self._flip(study_data[:, :, slice_index],
+                                                                            roi_data[:, :, slice_index])
             elif augmentation_type == "shift":
-                transformed_study_slice, transformed_roi_slice = self._shift(study_data[:, :, slice_index], roi_data[:, :, slice_index])
+                transformed_study_slice, transformed_roi_slice = self._shift(study_data[:, :, slice_index],
+                                                                             roi_data[:, :, slice_index])
             elif augmentation_type == "brightness":
-                transformed_study_slice, transformed_roi_slice = self._brightness(study_data[:, :, slice_index], roi_data[:, :, slice_index])
+                transformed_study_slice, transformed_roi_slice = self._brightness(study_data[:, :, slice_index],
+                                                                                  roi_data[:, :, slice_index])
             elif augmentation_type == "gamma":
-                transformed_study_slice, transformed_roi_slice = self._gamma(study_data[:, :, slice_index], roi_data[:, :, slice_index])
+                transformed_study_slice, transformed_roi_slice = self._gamma(study_data[:, :, slice_index],
+                                                                             roi_data[:, :, slice_index])
             transformed_study_slices.append(transformed_study_slice)
             transformed_roi_slices.append(transformed_roi_slice)
-        transformed_study_volume = np.stack(transformed_study_slices, axis=-1) if transformed_study_slices else np.array([])
+        transformed_study_volume = np.stack(transformed_study_slices,
+                                            axis=-1) if transformed_study_slices else np.array([])
         transformed_roi_volume = np.stack(transformed_roi_slices, axis=-1) if transformed_roi_slices else np.array([])
 
         if transformed_study_volume.any():
-            self._save_transformed_volume(patient_id, transformed_study_volume, study_volume.affine, "study", augmentation_type)
+            self._save_transformed_volume(patient_id, transformed_study_volume, study_volume.affine, "study",
+                                          augmentation_type)
         if transformed_roi_volume.any():
-            self._save_transformed_volume(patient_id, transformed_roi_volume, roi_volume.affine, "roi", augmentation_type)
+            self._save_transformed_volume(patient_id, transformed_roi_volume, roi_volume.affine, "roi",
+                                          augmentation_type)
 
     def _save_transformed_volume(self, patient_id: str, volume_data: np.ndarray, affine: np.ndarray, volume_type: str, augmentation_type: str) -> None:
-        # Generar un nuevo volumen de imagen con la transformación aplicada y guardarlo como un nuevo archivo .nii.gz
-        new_volume = nib.Nifti1Image(volume_data, affine)
-        output_file_name = f"{patient_id}_{volume_type}_{augmentation_type}.nii.gz"
-        output_file_path = os.path.join(self.roi_path if volume_type == "roi" else self.study_path, output_file_name)
-        nib.save(new_volume, output_file_path)
-                 
-                    
-def main():
-    dataaug_instance = DataAugmentation(study_path="/home/mario/VSCode/Dataset/ds-epilepsy/T2FLAIR",
-                                        roi_path="/home/mario/VSCode/Dataset/ds-epilepsy/ROI")
-    dataaug_instance.apply_augmentations(["brightness"])
-    
-    
+        base_file_name = f"{patient_id}_{volume_type}_{augmentation_type}" # Define output_file_name before the try block
+        try:
+            # Generate a new volume of image with the transformation applied
+            new_volume = nib.Nifti1Image(volume_data, affine)
+            output_file_path = os.path.join(self.roi_path if volume_type == "roi" else self.study_path, base_file_name)
+            
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+            
+            # Check for existing augmented files for this patient and augmentation type
+            existing_files = glob.glob(f"{output_file_path}_*.nii.gz")
+            if existing_files:
+                # Extract the highest identifier from existing files
+                highest_id = max(int(re.search(r'_(\d+)\.nii\.gz', file).group(1)) for file in existing_files)
+                # Increment the identifier for the new file
+                new_id = highest_id + 1
+            else:
+                # If no existing files, start with 0
+                new_id = 0
+            
+            # Construct the new file name with the incremented identifier
+            output_file_name = f"{base_file_name}_{new_id}.nii.gz"
+            output_file_path = os.path.join(os.path.dirname(output_file_path), output_file_name)
+            
+            # Save the new volume
+            nib.save(new_volume, output_file_path)
+        except Exception as e:
+            print(f"Failed to save {output_file_name}: {e}")
 
-    
-if __name__ == "__main__":
-    main()
+
