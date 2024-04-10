@@ -7,20 +7,27 @@ from tqdm import tqdm
 import glob
 from typing import Dict, List, Tuple
 import math
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import re
-
+from data_loader import HoldOut
 class DataAugmentation:
 
-    def __init__(self, study_path: str, roi_path: str) -> None:
+    def __init__(self, study_path: str, roi_path: str, HoldOutInstance: HoldOut) -> None:
         self.study_path = study_path
         self.roi_path = roi_path
+        
+        # Dictionary, Patient ID: [Slices with ROI]
         self.valid_roi_slices: Dict[str, List[int]] = {}
-        self.__find_valid_roi_slices__()
+        # Train, validation and test sets (as lists)
+        self.test_set = HoldOutInstance.test_set
+        self.train_set = HoldOutInstance.train_set
+        self.val_set = HoldOutInstance.val_set
 
-    # Find valid slices for each patient. We consider a slice as valir
+        self._find_valid_roi_slices_()
+
+    # Find valid slices for each patient. We consider a slice as valid
     # if its corresponding roi's contour has at least 5 points
-    def __process_roi_file__(self, roi_file: str) -> Tuple[str, List[int]]:
+    def _process_roi_file_(self, roi_file: str) -> Tuple[str, List[int]]:
         valid_slices = []
         roi_path = os.path.join(self.roi_path, roi_file)
         roi_img = nib.load(roi_path)
@@ -37,13 +44,18 @@ class DataAugmentation:
         return (patient_id, valid_slices)
 
     # Apply the function process_roi_file concurrently
-    def __find_valid_roi_slices__(self) -> None:
-        with ThreadPoolExecutor() as executor:
+    def _find_valid_roi_slices_(self) -> None:
+        if not os.path.exists(self.roi_path):
+            print("ROI path does not exist can't apply data augmentation.")
+            return
+
+        with ProcessPoolExecutor() as executor:
             futures = []
 
             for roi_file in os.listdir(self.roi_path):
+                # Avoid applying data augmentation techniques to images in the test set
                 if roi_file.endswith('.nii.gz'):
-                    futures.append(executor.submit(self.__process_roi_file__, roi_file))
+                    futures.append(executor.submit(self._process_roi_file_, roi_file))
 
             for future in as_completed(futures):
                 patient_id, valid_slices = future.result()
@@ -54,8 +66,12 @@ class DataAugmentation:
     # The augmentation method will create two .nii.gz file, one corresponding
     # to the study img and the other to the corresponding ROI
     def apply_augmentations(self, augmentation_types: List[str], num_patients:int) -> None:
-        selected_patients = random.choices(list(self.valid_roi_slices.keys()), k=num_patients)
-        with ThreadPoolExecutor() as executor:
+        # Avoid using test patients as input augmentation data
+        test_patients = np.array([x.split("_")[0] for x in self.test_set])
+        train_val_patients = np.setdiff1d(np.array(list(self.valid_roi_slices.keys())), test_patients)
+        selected_patients = random.choices(train_val_patients, k=num_patients)
+
+        with ProcessPoolExecutor() as executor:
             futures = []
 
             # Generate tasks for the executor for selected patients
@@ -67,7 +83,7 @@ class DataAugmentation:
             tasks_progress = tqdm(as_completed(futures), total=len(futures), desc="Applying data augmentation")
 
             for future in tasks_progress:
-                future.result() # Here you can handle results or exceptions if necessary
+                future.result() 
 
     # Finds the patient's .nii.gz files, but excludes the ones that have the augmentation type applied in its name
     def _find_files(self, path: str, patient_id: str, exclude_keywords: List[str]) -> List[str]:
