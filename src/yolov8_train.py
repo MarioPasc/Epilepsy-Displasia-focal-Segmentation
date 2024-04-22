@@ -2,7 +2,7 @@ import argparse
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
-from ultralytics import YOLO
+#from ultralytics import YOLO
 import numpy as np
 import os
 import glob
@@ -13,9 +13,9 @@ class SegmentationV8:
     def __init__(self, path_model, yaml_file):
         self.model = self.load_model(path_model=path_model)
         self.yaml_file = yaml_file
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        self.weights_folder = os.path.join(base_dir, "runs/segment/Yolov8-Train/weights")
-        self.csv_path = os.path.join(base_dir, "runs/segment/Yolov8-Train/results_val.csv")
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.weights_folder = os.path.join(self.base_dir, "runs/segment/Yolov8-Train/weights")
+        self.csv_path = os.path.join(self.base_dir, "runs/segment/Yolov8-Train/results_val.csv")
 
     def load_model(self, path_model):
         model_path = path_model if os.path.exists(path_model) else "yolov8n-seg.pt"
@@ -94,7 +94,7 @@ class SegmentationV8:
         """
         # Load training and validation metrics
         train_metrics_df = pd.read_csv(os.path.join(self.base_dir, "runs/segment/Yolov8-Train/results.csv"))
-        train_metrics_df.columns = train_metrics_df.columns.str.strip()  # Strip leading/trailing spaces from column names        train_metrics_df.columns = train_metrics_df.columns.str.strip()  # Strip leading/trailing spaces from column names
+        train_metrics_df.columns = train_metrics_df.columns.str.strip()  
         val_metrics_df = pd.read_csv(self.csv_path)
 
         def plot_metric(train_df, val_df, metric_name):
@@ -107,7 +107,7 @@ class SegmentationV8:
             val_df_filtered = val_df[val_df['epoch'].isin(common_epochs)]
 
             plt.figure(figsize=(10, 5))
-            plt.plot(train_df_filtered['epoch'], train_df_filtered[metric_name], label=f'Training {metric_name}')
+            plt.plot(train_df_filtered['epoch'], train_df_filtered[[f"metrics/{metric_name}"]], label=f'Training {metric_name}')
             plt.plot(val_df_filtered['epoch'], val_df_filtered[metric_name], label=f'Validation {metric_name}')
             plt.xlabel('Epoch')
             plt.ylabel(metric_name)
@@ -116,6 +116,7 @@ class SegmentationV8:
 
             # Ensure the save path exists
             save_path = os.path.join(self.base_dir, "runs/segment/Yolov8-Train/metrics")
+            print(save_path)
             os.makedirs(save_path, exist_ok=True)
             plt.savefig(f"{save_path}/{metric_name.replace('metrics/', '')}_train_vs_val_per_epoch.png")
             plt.close()
