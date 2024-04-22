@@ -62,6 +62,8 @@ class DataAugmentation:
                 if valid_slices:
                     self.valid_roi_slices[patient_id] = valid_slices
 
+    
+
     # Apply the selected data augmentation method.
     # The augmentation method will create two .nii.gz file, one corresponding
     # to the study img and the other to the corresponding ROI

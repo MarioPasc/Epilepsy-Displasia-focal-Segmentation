@@ -7,7 +7,7 @@ import os
 import glob
 from data_loader import HoldOut
 from typing import List
-
+from tqdm import tqdm
 
 class YOLOv8DatasetGenerator:
 
@@ -147,8 +147,6 @@ class YOLOv8DatasetGenerator:
             if contours:
                 # Construct the output file name
                 output_file_name = output_format.format(i=i)
-                if id_patient == "sub-00001": print(f"Image output: {output_file_name}")
-
                 output_file_path = os.path.join(output_path, output_file_name)
                 self._contoursYOLO_(contours=contours,
                                     height=slice.shape[0],
@@ -158,7 +156,7 @@ class YOLOv8DatasetGenerator:
 
     def generate_yolo_ds(self) -> None:
         study_path = os.path.join(self.dataset_path, self.study_name)
-        for niigz_file in os.listdir(study_path):
+        for niigz_file in tqdm(os.listdir(study_path), colour="red", desc="Generated YOLOv8 Dataset"):
             if niigz_file in self.train_set:
                 image_output_path = os.path.join(self.ds_yolov8, "images", "train")
                 label_output_path = os.path.join(self.ds_yolov8, "labels", "train")
