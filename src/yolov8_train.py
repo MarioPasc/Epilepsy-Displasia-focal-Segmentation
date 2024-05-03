@@ -2,7 +2,7 @@ import argparse
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
-#from ultralytics import YOLO
+from ultralytics import YOLO
 import numpy as np
 import os
 import glob
@@ -42,7 +42,7 @@ class SegmentationV8:
         if os.path.exists(last_pt_path):
             weights_files.append(last_pt_path)
 
-        epoch_counter = 1 # Reservamos 0 para best.pt
+        epoch_counter = 1 
         with open(self.csv_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(['epoch', 'file',
@@ -122,40 +122,11 @@ class SegmentationV8:
             plt.close()
 
         # Define the metrics you want to plot
-        metric_names = ['metrics/precision(M)', 'metrics/recall(M)', 'metrics/mAP50(M)', 'metrics/mAP50-95(M)',
-                        'metrics/precision(B)', 'metrics/recall(B)', 'metrics/mAP50(B)', 'metrics/mAP50-95(B)']
+        metric_names = ['precision(M)', 'recall(M)', 'mAP50(M)', 'mAP50-95(M)',
+                        'precision(B)', 'recall(B)', 'mAP50(B)', 'mAP50-95(B)']
 
         for metric_name in metric_names:
             plot_metric(train_metrics_df, val_metrics_df, metric_name)
-
-        def plot_confusion_matrix_save(df):
-            """
-            Plots and saves the average confusion matrix from validation dataset.
-            """
-            mean_TP = round(df['TP'].mean(), 1)
-            mean_TN = round(df['TN'].mean(), 1)
-            mean_FP = round(df['FP'].mean(), 1)
-            mean_FN = round(df['FN'].mean(), 1)
-
-            confusion_matrix = np.array([[mean_TP, mean_FP],
-                                         [mean_FN, mean_TN]])
-
-            fig, ax = plt.subplots(figsize=(5, 5))
-            sns.heatmap(confusion_matrix, annot=True, fmt=".1f", linewidths=.5, square=True, cmap='Blues',
-                        xticklabels=['Predicted Positive', 'Predicted Negative'],
-                        yticklabels=['Actual Positive', 'Actual Negative'], ax=ax)
-
-            plt.title('Average Confusion Matrix', size=15)
-            plt.ylabel('Actual label', size=12)
-            plt.xlabel('Predicted label', size=12)
-
-            # Save the plot
-            save_path = os.path.join(self.base_dir, "runs/segment/Yolov8-Train/")
-            os.makedirs(save_path, exist_ok=True)  # Ensure the directory exists
-            plt.savefig(f"{save_path}/average_confusion_matrix.png")
-            plt.close()
-
-        plot_confusion_matrix_save(val_metrics_df)
 
 
 def main(path_model, yaml_path):

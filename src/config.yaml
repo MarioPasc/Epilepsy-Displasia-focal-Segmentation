@@ -1,4 +1,4 @@
-path: /home/mariopasc/Python/Datasets/T2FLAIR_yolov8_dataset
+path: /home/mariopasc/Python/Datasets/BiggerFCD_T2FLAIR_yolov8_dataset
 train: images/train
 val: images/val
 test: images/test

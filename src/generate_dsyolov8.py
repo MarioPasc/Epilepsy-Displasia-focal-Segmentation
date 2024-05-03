@@ -16,7 +16,7 @@ class YOLOv8DatasetGenerator:
         self.val_set = HoldOutInstance.val_set
         self.test_set = HoldOutInstance.test_set
         self.augmentation_methods = ["gamma", "brightness", "flip", "shift"]
-        self.exclude = list(range(0, 121)) + list(range(200, 257))
+        self.exclude = list(range(0, 105)) + list(range(200, 257))
 
         self.dataset_path = HoldOutInstance.dataset_path
         self.study_name = HoldOutInstance.study_name
