@@ -8,7 +8,7 @@ import csv
 import cv2
 from typing import List
 import nibabel as nib
-
+import torch
 
 
 class localYoloV8:
@@ -27,6 +27,8 @@ class localYoloV8:
         self.output_dir = output_dir
         
         self.masks = {}
+        self.stats_df = pd.DataFrame(columns=["patient_id", "slice", "exist", "dice_score"])
+
 
     def validateYolov8(self):
         weights_files = sorted([file for file in glob.glob(os.path.join(self.weights_folder, '*.pt'))
@@ -129,13 +131,19 @@ class localYoloV8:
 
         for i, file in enumerate(predict_files):
             results = model(file, stream=True)
+            thisFileName = os.path.basename(file).strip(".png").split("-")
+            patient_id = int(thisFileName[1].split("_")[0])
+            slice = int(thisFileName[2])
 
             for im_pred in results:
-                boxes = im_pred.boxes
-                probs = im_pred.probs
                 mask = im_pred.masks
-                if mask is not None: 
+                if mask is not None:
                     self.masks[os.path.basename(file)] = mask.cpu()
+                    new_row = pd.DataFrame({"patient_id": [patient_id], "slice": [slice], "exist": [1], "dice_score": [0]})
+                    self.stats_df = pd.concat([self.stats_df, new_row], ignore_index=True)
+                else:
+                    new_row = pd.DataFrame({"patient_id": [patient_id], "slice": [slice], "exist": [0], "dice_score": [0]})
+                    self.stats_df = pd.concat([self.stats_df, new_row], ignore_index=True)
                 im_pred.save(filename=os.path.join(self.test_results_path, f"{os.path.basename(file)}_predict.png"))
 
     def _obtain_test_patients(self) -> List[str]:
@@ -164,34 +172,27 @@ class localYoloV8:
             return 1.0  # Si ambas máscaras están vacías, el score es perfecto
         return 2 * intersection / total
 
+    def _analize_and_plot(self, patient_id, slice_number, image_niigz_file, roi_niigz_file, masks):
+        merged_tensor = np.zeros(shape=(masks.shape[1], masks.shape[2]))
+        for i in range(masks.shape[0]):
+            merged_tensor += masks[i]
+        merged_tensor = np.clip(merged_tensor, 0, 1)
 
-    def _merge_mask_channels(self, mask_tensor):
-        # Sum all the channels along the channel dimension
-        merged_mask = np.sum(mask_tensor, axis=0)
-        
-        # Normalize the merged mask to the range [0, 1]
-        merged_mask = merged_mask / np.max(merged_mask)
-        
-        return merged_mask
-
-    def _analize_and_plot(self, patient_id, slice_number, image_niigz_file, roi_niigz_file, mask):
         # Load the NIfTI files
         image_data = nib.load(image_niigz_file).get_fdata()
         roi_data = nib.load(roi_niigz_file).get_fdata()
-        
         # Get the corresponding slice
         image_slice = image_data[:, :, slice_number]
         roi_slice = roi_data[:, :, slice_number]
         
-        # Merge the channels of the predicted mask
-        merged_mask = self._merge_mask_channels(mask)
-        
-        # Resize the merged mask to match the shape of roi_slice
-        mask_resized = cv2.resize(merged_mask, (roi_slice.shape[1], roi_slice.shape[0]), interpolation=cv2.INTER_NEAREST)
-        
+        roi_slice = cv2.resize(roi_slice, (merged_tensor.shape[1], merged_tensor.shape[0]), interpolation=cv2.INTER_AREA)
+        image_slice = cv2.resize(image_slice, (merged_tensor.shape[1], merged_tensor.shape[0]), interpolation=cv2.INTER_AREA)
+
         # Calculate the Dice score 
-        dice = self._dice_score(roi_slice, mask_resized)
-        
+        dice = self._dice_score(roi_slice, merged_tensor)
+        # Update the dice_score in self.stats_df
+        mask_stat = (self.stats_df['patient_id'] == int(patient_id.split("-")[1])) & (self.stats_df['slice'] == int(slice_number))
+        self.stats_df.loc[mask_stat, 'dice_score'] = dice
         # Create the visualization
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
         
@@ -205,7 +206,7 @@ class localYoloV8:
         ax2.axis('off')
         
         ax3.imshow(image_slice, cmap='gray')
-        ax3.imshow(mask_resized, cmap='jet', alpha=0.7)
+        ax3.imshow(merged_tensor, cmap='jet', alpha=0.7)
         ax3.set_title('Predicted Mask')
         ax3.axis('off')
         
@@ -217,36 +218,12 @@ class localYoloV8:
         plt.savefig(os.path.join(os.path.join(self.test_results_path, "test_check"), f'{patient_id}_slice_{slice_number}_comparison.png'))
         plt.close(fig)
 
-    def visualize_mask_tensor(self, mask_tensor, patient_id, slice_number, save_path):
-        # Determine the number of channels in the mask tensor
-        num_channels = mask_tensor.shape[0]
-        
-        # Create a figure with subplots for each channel
-        fig, axes = plt.subplots(1, num_channels, figsize=(5 * num_channels, 5))
-        
-        # If there is only one channel, make sure axes is a list
-        if num_channels == 1:
-            axes = [axes]
-        
-        # Iterate over each channel and plot the mask
-        for i in range(num_channels):
-            axes[i].imshow(mask_tensor[i], cmap='gray')
-            axes[i].set_title(f'Mask Channel {i+1}')
-            axes[i].axis('off')
-        
-        # Set the overall title for the figure
-        fig.suptitle(f'Patient: {patient_id}, Slice: {slice_number}')
-        fig.tight_layout()
-        
-        # Save the figure
-        plt.savefig(os.path.join(save_path, f'{patient_id}_slice_{slice_number}_mask_channels.png'))
-        plt.close(fig)
-
     def check_test_results(self):
         test_patients = self._obtain_test_patients()
         # Obtain the niigz test files
         roi_test_niigzFiles = [test_files for test_files in os.listdir(self.roi_study_path) if test_files.split("_")[0] in test_patients]
         image_test_niigzFiles = [test_files for test_files in os.listdir(self.study_path) if test_files.split("_")[0] in test_patients]
+
 
         for pred_patient in self.masks.keys():
             # Obtain the slice number from the patient file name
@@ -261,15 +238,13 @@ class localYoloV8:
                 # Get ground truth data
                 roi_niigz_file = os.path.join(self.roi_study_path, roi_test_niigzFile[0])
                 # Get prediction data
-                mask = self.masks.get(pred_patient).data.cpu().numpy().squeeze()
-                self._analize_and_plot(patient_id=patient_id, 
-                                                    slice_number=slice_number,
-                                                    image_niigz_file=image_niigz_file,
-                                                    roi_niigz_file=roi_niigz_file,
-                                                    mask=mask)
-                
+                mask = self.masks.get(pred_patient).data.cpu().numpy()
+
+                self._analize_and_plot(patient_id=patient_id, slice_number=slice_number, image_niigz_file=image_niigz_file, roi_niigz_file=roi_niigz_file, masks=mask)
+
+                torch.save(mask, os.path.join(self.output_dir, "maskTensors", f"{patient_id}_slice_{slice_number}.pt"))                
                 # Save self.masks.get(pred_patient).xy to a .txt file
-                output_file = os.path.join(self.output_dir, f"{patient_id}_slice_{slice_number}.txt")
+                output_file = os.path.join(self.output_dir, "xyn_coordinates", f"{patient_id}_slice_{slice_number}.txt")
                 with open(output_file, "w") as f:
                     xyn_coords = self.masks.get(pred_patient).xyn
                     
@@ -281,6 +256,8 @@ class localYoloV8:
                         f.write("0 ")
                         f.write(xyn_coords_str)
                         f.write("\n")
+                self.stats_df.sort_values(by="patient_id")
+                self.stats_df.to_csv(os.path.join(self.output_dir, "stats.csv"))
 
 
 
@@ -293,7 +270,7 @@ def main() -> None:
                             test_results_path="/home/mariopasc/Python/old-dataset/Results-BiggerFCD/test",
                             roi_study_path="/home/mariopasc/Python/Datasets/ds-epilepsy/BiggerFCD_ROIT2FLAIR",
                             study_path="/home/mariopasc/Python/Datasets/ds-epilepsy/BiggerFCD_T2FLAIR",
-                            output_dir="/home/mariopasc/Python/old-dataset/Results-BiggerFCD/xyn_coordinates")
+                            output_dir="/home/mariopasc/Python/old-dataset/Results-BiggerFCD")
     #ValInstance.validateYolov8()
     #ValInstance.val_metrics()
     ValInstance.test_yolov8()
