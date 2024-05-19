@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple
 import math
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import re
-from data_loader import HoldOut
+from holdout import HoldOut
 class DataAugmentation:
 
     def __init__(self, study_path: str, roi_path: str, HoldOutInstance: HoldOut) -> None:

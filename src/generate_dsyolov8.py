@@ -5,18 +5,20 @@ import numpy as np
 from itertools import chain
 import os
 import glob
-from data_loader import HoldOut
+from holdout import HoldOut
 from typing import List
 from tqdm import tqdm
-
+import shutil
 class YOLOv8DatasetGenerator:
 
-    def __init__(self, HoldOutInstance: HoldOut) -> None:
+    def __init__(self, HoldOutInstance: HoldOut, save_test: bool) -> None:
+        self.holdout = HoldOutInstance
         self.train_set = HoldOutInstance.train_set
         self.val_set = HoldOutInstance.val_set
         self.test_set = HoldOutInstance.test_set
         self.augmentation_methods = ["gamma", "brightness", "flip", "shift"]
         self.exclude = list(range(0, 105)) + list(range(200, 257))
+        self.save_test = save_test
 
         self.dataset_path = HoldOutInstance.dataset_path
         self.study_name = HoldOutInstance.study_name
@@ -173,4 +175,15 @@ class YOLOv8DatasetGenerator:
             completed = self._niiToPNG_(niigzFile=niigz_file, output_format=format_image, output_path=image_output_path)    
             if completed: # If we can generate the image, generate the corresponding label
                 self._niiLabelEncoder_(niigzFile=niigz_file, output_format=format_label, output_path=label_output_path)
+            # 2. Save all test ROI images 
+        if (self.save_test):
+            folder = os.path.join(self.dataset_path, "..", "test_roi_masks")
+            os.makedirs(folder, exist_ok=True)
+            roi_niigz_path = os.path.join(self.dataset_path, self.holdout.roi_study)
+            for test_file in self.test_set:
+                name = test_file.strip(".nii.gz")
+                test_file = name + "_roi.nii.gz"
+                shutil.copy2(os.path.join(roi_niigz_path, test_file), folder)
+
+
 

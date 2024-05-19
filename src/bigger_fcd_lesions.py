@@ -7,7 +7,6 @@ from typing import List
 import glob
 
 class BiggerLesions:
-
     def __init__(self, study_path: str, roi_path: str, kernel_size:int, iterations:int) -> None:
         self.study_path = study_path
         self.roi_path = roi_path
@@ -20,21 +19,12 @@ class BiggerLesions:
         os.makedirs(os.path.join(self.study_path, "..", self.output_image_folder), exist_ok=True)
         os.makedirs(os.path.join(self.study_path, "..", self.output_roi_folder), exist_ok=True)
 
-    def _applyDilation(self, image_slice:np.ndarray, mask_slice:np.ndarray) -> List[np.ndarray]:
-        # Extract the corresponding lesion from the original image
-        lesion_region = cv2.bitwise_and(image_slice, image_slice, mask=mask_slice)
-
+    def _applyDilation(self, mask_slice:np.ndarray) -> np.ndarray:
         # Dilate the mask
         kernel = np.ones((self.kernel_size, self.kernel_size), np.uint8)
-        dilated_lesion = cv2.dilate(lesion_region, kernel, iterations=self.iterations)
+        dilated_mask = cv2.dilate(mask_slice, kernel, iterations=self.iterations)
 
-        # Create the result image by copying the original slice
-        result_image = image_slice.copy()
-
-        # Paste the dilated lesion onto the result image
-        result_image[dilated_lesion > 0] = dilated_lesion[dilated_lesion > 0]
-
-        return [result_image, dilated_lesion]
+        return dilated_mask
     
     def _getCorrespondingROI(self, image_name:str) -> str:
         split_by_sub = image_name.strip(".nii.gz").split("_")
@@ -64,11 +54,9 @@ class BiggerLesions:
                 for slice_index in range(image.shape[2]):
                     image_slice = image[:, :, slice_index]
                     mask_slice = mask[:, :, slice_index]
-                    result = self._applyDilation(image_slice, mask_slice)
-                    image_biggerLesion = result[0]
-                    roi_biggerLesion = result[1]
-                    volume_images.append(image_biggerLesion)
-                    volume_masks.append(roi_biggerLesion)
+                    dilated_mask = self._applyDilation(mask_slice)
+                    volume_images.append(image_slice)
+                    volume_masks.append(dilated_mask)
                 
                 # Convert the lists to numpy arrays
                 volume_images = np.array(volume_images)
